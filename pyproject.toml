@@ -1,0 +1,48 @@
+[project]
+name = "mirage-bench"
+version = "0.0.1"
+description = "A RAG-based benchmark for multilingual question answering."
+license = { file = "LICENSE" }
+readme = "README.md"
+authors = [
+    { name = "Nandan Thakur", email = "nandant@gmail.com" },
+    { name = "Amin Ahmad", email = "amin@vectara.com" },
+]
+requires-python = ">=3.10"
+keywords = [
+    "Transformer Networks",
+    "BERT",
+    "XLNet",
+    "sentence embedding",
+    "PyTorch",
+    "NLP",
+    "deep learning",
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "openai",
+    "vllm",
+    "datasets",
+]
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+Homepage = "https://github.com/vectara/mirage-bench"
+
+[tool.setuptools.packages.find]
+include = ["mirage_bench*"]
+namespaces = false
+
+[tool.ruff]
+line-length = 119
+fix = true
