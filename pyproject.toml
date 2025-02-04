@@ -6,6 +6,7 @@ license = { file = "LICENSE" }
 readme = "README.md"
 authors = [
     { name = "Nandan Thakur", email = "nandant@gmail.com" },
+    { name = "Suleman Kazi", email = "suleman@vectara.com" },
     { name = "Amin Ahmad", email = "amin@vectara.com" },
 ]
 requires-python = ">=3.10"
@@ -29,7 +30,10 @@ classifiers = [
 dependencies = [
     "openai",
     "vllm",
+    "transformers",
     "datasets",
+    "stanza",
+    "sentencex"
 ]
 
 [build-system]
@@ -46,3 +50,28 @@ namespaces = false
 [tool.ruff]
 line-length = 119
 fix = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+# Skip `E731` (do not assign a lambda expression, use a def)
+ignore = [
+    # LineTooLong
+    "E501",
+    # DoNotAssignLambda
+    "E731"
+]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/**" = [
+    # Ignore `E402` (import violations) in all examples
+    "E402", 
+    # Ignore missing required imports
+    "I002"
+    ]
+
+[tool.ruff.lint.isort]
+known-third-party = ["datasets"]
+required-imports = ["from __future__ import annotations"]

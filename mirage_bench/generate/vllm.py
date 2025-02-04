@@ -4,23 +4,25 @@ distributively on a multi-nodes cluster.
 
 Learn more about Ray Data in https://docs.ray.io/en/latest/data/data.html
 """
+from __future__ import annotations
 
-from vllm import LLM, SamplingParams
-from typing import Dict
-from transformers import AutoTokenizer, AutoModelForCausalLM
+import argparse
+import os
+
+import datasets
 import numpy as np
 import ray
-import datasets
-import json
-import os
-import argparse
-from typing import List, Union, Optional
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from vllm import LLM, SamplingParams
+
+from mirage_bench.util import save_results
 
 from .dataset import HFDataset
 
+
 class HFModel:
 
-    def __init__(self, model_name: str, cache_dir: Optional[str] = "./cache"):
+    def __init__(self, model_name: str, cache_dir: str | None = "./cache"):
         self.model_name = model_name
         self.cache_dir = cache_dir
 
@@ -35,16 +37,16 @@ class LLMPredictor:
     def __init__(self):
         # Create an LLM.
         self.additional_keys = args.additional_keys
-        self.llm = LLM(model=args.model, 
-                    max_model_len=args.max_model_len, 
-                    max_num_seqs=1, 
+        self.llm = LLM(model=args.model,
+                    max_model_len=args.max_model_len,
+                    max_num_seqs=1,
                     max_seq_len_to_capture=args.max_model_len,
                     download_dir=args.cache_dir,
-                    dtype="bfloat16", 
+                    dtype="bfloat16",
                     trust_remote_code=True)  # skip graph capturing for faster cold starts)
-        
 
-    def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, list]:
+
+    def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
         # Generate texts from the prompts.
         # The output is a list of RequestOutput objects that contain the prompt,
         # generated text, and other information.
@@ -54,7 +56,7 @@ class LLMPredictor:
         for output in outputs:
             prompt.append(output.prompt)
             generated_text.append(' '.join([o.text for o in output.outputs]))
-        
+
         output_dict = {"prompt": batch["prompt"], "output": generated_text}
         if self.additional_keys:
             for key in self.additional_keys:
@@ -62,29 +64,29 @@ class LLMPredictor:
         return output_dict
 
 class VLLMGenerator(LLMPredictor):
-        
-        def __init__(self, model_name: str, cache_dir: Optional[str] = "./cache"):
+
+        def __init__(self, model_name: str, cache_dir: str | None = "./cache"):
             super().__init__(model_name, cache_dir)
             self.model_name = model_name
             self.cache_dir = cache_dir
             self.hf_model = HFModel(model_name, cache_dir)
-        
+
         def initialize(self):
             self.tokenizer = self.hf_model.load_model()
-            self.llm = LLM(model=self.model_name, 
-                        max_model_len=args.max_model_len, 
-                        max_num_seqs=1, 
+            self.llm = LLM(model=self.model_name,
+                        max_model_len=args.max_model_len,
+                        max_num_seqs=1,
                         max_seq_len_to_capture=args.max_model_len,
                         download_dir=self.cache_dir,
-                        dtype="bfloat16", 
+                        dtype="bfloat16",
                         trust_remote_code=True)
-            
+
             self.sampling_params = SamplingParams(temperature=args.temperature,
                                     max_tokens=args.max_new_tokens,
                                     stop_token_ids=terminators if terminators else None,
-                                    stop=stop_strings if stop_strings else None, 
+                                    stop=stop_strings if stop_strings else None,
                                     )
-        
+
         def prepare_dataset(self, dataset_name: str, language: str, split: str, filter_start: int = 0, filter_end: int = None):
             hf_dataclass = HFDataset(dataset_name, language, split=split, cache_dir=self.cache_dir)
             hf_dataclass.load_dataset()
@@ -93,7 +95,7 @@ class VLLMGenerator(LLMPredictor):
             return hf_dataclass.hf_dataset
 
         def batch_inference(self, dataset, output_dir: str, filename: str, batch_size: int = 8, num_gpus: int = 1, concurrency: int = 4, shards: int = 12):
-            
+
             ds = ray.data.from_huggingface(dataset)
             ds = ds.repartition(shards, shuffle=False)
             ds = ds.map_batches(
@@ -109,20 +111,20 @@ class VLLMGenerator(LLMPredictor):
                 zero_copy_batch=True,
             )
             outputs = ds.take_all()
-            
+
             output_dict = {}
-            
+
             for idx, output in enumerate(outputs):
                 generated_text = output["output"]
                 output_dict[idx] = {"outputs": {self.model_name: generated_text}, "prompt": output["prompt"]}
                 output_dict[idx].update({"query_id": output["query_id"],
-                                        "positive_ids": list(output["positive_ids"]), 
+                                        "positive_ids": list(output["positive_ids"]),
                                         "negative_ids": list(output["negative_ids"])})
-                
 
 
-    
-        def generate(self, batch: Dict[str, np.ndarray], sampling_params: SamplingParams) -> Dict[str, list]:
+
+
+        def generate(self, batch: dict[str, np.ndarray], sampling_params: SamplingParams) -> dict[str, list]:
             # Generate texts from the prompts.
             # The output is a list of RequestOutput objects that contain the prompt,
             # generated text, and other information.
@@ -132,11 +134,11 @@ class VLLMGenerator(LLMPredictor):
             for output in outputs:
                 prompt.append(output.prompt)
                 generated_text.append(' '.join([o.text for o in output.outputs]))
-            
+
             return {
                 "prompt": batch["prompt"],
                 "output": generated_text,
-                "query_id": batch["query_id"], 
+                "query_id": batch["query_id"],
                 "positive_ids": batch["positive_ids"],
                 "negative_ids": batch["negative_ids"]
             }
@@ -145,7 +147,7 @@ class VLLMGenerator(LLMPredictor):
 
 
 if __name__ == '__main__':
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--language", default=None)
     parser.add_argument("--temperature", required=False, type=float, default=0.3)
@@ -169,7 +171,7 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(args.model, cache_dir=args.cache_dir, trust_remote_code=True)
     temp_model = AutoModelForCausalLM.from_pretrained(args.model, cache_dir=args.cache_dir, trust_remote_code=True)
     del temp_model
-    
+
     # Create a sampling params object.
     terminators, stop_strings = [], []
     if "llama-3" in args.model.lower():
@@ -179,7 +181,7 @@ if __name__ == '__main__':
     sampling_params = SamplingParams(temperature=args.temperature,
                                     max_tokens=args.max_new_tokens,
                                     stop_token_ids=terminators if terminators else None,
-                                    stop=stop_strings if stop_strings else None, 
+                                    stop=stop_strings if stop_strings else None,
                                     )
 
     # Create a class to do batch inference.
@@ -187,15 +189,15 @@ if __name__ == '__main__':
 
         def __init__(self):
             # Create an LLM.
-            self.llm = LLM(model=args.model, 
-                        max_model_len=args.max_model_len, 
-                        max_num_seqs=1, 
+            self.llm = LLM(model=args.model,
+                        max_model_len=args.max_model_len,
+                        max_num_seqs=1,
                         max_seq_len_to_capture=args.max_model_len,
                         download_dir=args.cache_dir,
-                        dtype="bfloat16", 
+                        dtype="bfloat16",
                         trust_remote_code=True)  # skip graph capturing for faster cold starts)
 
-        def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, list]:
+        def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
             # Generate texts from the prompts.
             # The output is a list of RequestOutput objects that contain the prompt,
             # generated text, and other information.
@@ -205,11 +207,11 @@ if __name__ == '__main__':
             for output in outputs:
                 prompt.append(output.prompt)
                 generated_text.append(' '.join([o.text for o in output.outputs]))
-            
+
             return {
                 "prompt": batch["prompt"],
                 "output": generated_text,
-                "query_id": batch["query_id"], 
+                "query_id": batch["query_id"],
                 "positive_ids": batch["positive_ids"],
                 "negative_ids": batch["negative_ids"]
             }
@@ -222,11 +224,12 @@ if __name__ == '__main__':
     # datasets_list = [datasets.Dataset.from_list(load_jsonl_file(i)) for i in .dataset_name]
     # hf_dataset = datasets.concatenate_datasets(datasets_list)
 
-    if args.filter_end is None: args.filter_end = len(hf_dataset)
-    
+    if args.filter_end is None:
+        args.filter_end = len(hf_dataset)
+
     print(f"Loaded {len(hf_dataset)} prompts for {args.language}...")
     output_filepath = f"{args.filename}-{args.filter_start}-{args.filter_end}.jsonl"
-    
+
     if os.path.exists(os.path.join(args.output_dir, output_filepath)):
         print(f"File {output_filepath} already exists. No need to rerun the experiment.")
         exit(0)
@@ -246,11 +249,11 @@ if __name__ == '__main__':
     hf_dataset = hf_dataset.add_column("prompt_mistral", prompts)
 
     if args.filter_start > len(prompts):
-        print(f"Filter start is greater than the number of prompts. Exiting...")
+        print("Filter start is greater than the number of prompts. Exiting...")
         exit(0)
     elif args.filter_end > len(prompts):
         args.filter_end = len(prompts)
-    
+
     hf_dataset = hf_dataset.select(range(args.filter_start, args.filter_end))
 
     # Convert the Huggingface dataset to Ray Data.
@@ -283,10 +286,10 @@ if __name__ == '__main__':
         generated_text = output["output"]
         output_dict[idx] = {"outputs": {args.model: generated_text}, "prompt": output["prompt"]}
         output_dict[idx].update({"query_id": output["query_id"],
-                                  "positive_ids": list(output["positive_ids"]), 
+                                  "positive_ids": list(output["positive_ids"]),
                                   "negative_ids": list(output["negative_ids"])})
 
     os.makedirs(args.output_dir, exist_ok=True)
-    
+
     # Save the results in JSONL format.
     save_results(args.output_dir, output_dict, f"{args.filename}-{args.filter_start}-{args.filter_end}.jsonl")

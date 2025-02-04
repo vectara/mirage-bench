@@ -1,13 +1,14 @@
-from .utils import load_jsonl
-from typing import Optional
-from transformers import AutoTokenizer
+from __future__ import annotations
 
 import datasets
+from transformers import AutoTokenizer
+
+from .utils import load_jsonl
 
 
 class HFDataset:
     def __init__(
-        self, dataset_name: str, language: Optional[str], split: Optional[str], cache_dir: Optional[str] = "./cache"
+        self, dataset_name: str, language: str | None, split: str | None, cache_dir: str | None = "./cache"
     ):
         self.dataset_name = dataset_name
         self.language = language
@@ -36,7 +37,7 @@ class HFDataset:
 
     def filter_dataset(self, filter_start: int = 0, filter_end: int = None):
         hf_dataset_length = len(self.hf_dataset)
-        if filter_end == None:
+        if filter_end is None:
             filter_end = hf_dataset_length
         elif filter_start > hf_dataset_length:
             return ValueError(
