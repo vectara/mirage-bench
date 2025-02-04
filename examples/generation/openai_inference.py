@@ -18,11 +18,12 @@ do
     --batch_size 12  --num_gpus 1 --concurrency 1 --filter_start 0
 done done
 """
+
 import argparse
 
 from mirage_bench.generate import HFDataset
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--language", default=None)
     parser.add_argument("--temperature", required=False, type=float, default=0.3)

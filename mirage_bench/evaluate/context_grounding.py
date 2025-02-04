@@ -16,39 +16,39 @@ class XNLIModel(AutoModelForSequenceClassification):
     def __init__(self, model_name: str):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            model_name, trust_remote_code=True).to(self.device)
-        self.label_names = [
-            "entailment",
-            "neutral",
-            "contradiction"
-        ]
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name, trust_remote_code=True).to(
+            self.device
+        )
+        self.label_names = ["entailment", "neutral", "contradiction"]
 
-    def predict(self,
-                premises: list[str],
-                hypothesis: list[str],
-                batch_size: int) -> dict[str, float]:
+    def predict(self, premises: list[str], hypothesis: list[str], batch_size: int) -> dict[str, float]:
         predictions = []
         with torch.no_grad():
-            for itr in tqdm(range(0, len(premises), batch_size), desc=f"Computing NLI Scores with batch_size = {batch_size}..."):
-                inputs = self.tokenizer(premises[itr:itr + batch_size],
-                                        hypothesis[itr:itr + batch_size],
-                                        max_length=self.tokenizer.model_max_length - 2,
-                                        padding=True,
-                                        truncation=True,
-                                        return_tensors="pt"
+            for itr in tqdm(
+                range(0, len(premises), batch_size), desc=f"Computing NLI Scores with batch_size = {batch_size}..."
+            ):
+                inputs = self.tokenizer(
+                    premises[itr : itr + batch_size],
+                    hypothesis[itr : itr + batch_size],
+                    max_length=self.tokenizer.model_max_length - 2,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
                 ).to(self.device)
                 outputs = self.model(inputs["input_ids"], attention_mask=inputs["attention_mask"])
-                prediction = torch.softmax(outputs["logits"], -1).tolist() # (batch_size, num_labels)
-                predictions += [{name: round(float(pred), 1) for pred, name in zip(preds, self.label_names)} for preds in prediction]
+                prediction = torch.softmax(outputs["logits"], -1).tolist()  # (batch_size, num_labels)
+                predictions += [
+                    {name: round(float(pred), 1) for pred, name in zip(preds, self.label_names)}
+                    for preds in prediction
+                ]
 
             return predictions
 
+
 class ContextGroundingEvaluator:
-    def __init__(self,
-                 language_code: str,
-                 model_name: str = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
-        ):
+    def __init__(
+        self, language_code: str, model_name: str = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+    ):
         self.language_code = language_code
         self.xnli_model = XNLIModel(model_name)
         self.scores = None
@@ -59,7 +59,13 @@ class ContextGroundingEvaluator:
             print("\tStanza Tokenizer not available, using SentenceX Tokenizer...")
             self.sentence_tokenizer = SentenceXTokenizer(language_code=language_code)
 
-    def evaluate(self, output: dict[str, str], documents: dict[str, dict[str, str]], batch_size: int = 128, preprocessing: bool = True) -> dict[str, dict[str, float]]:
+    def evaluate(
+        self,
+        output: dict[str, str],
+        documents: dict[str, dict[str, str]],
+        batch_size: int = 128,
+        preprocessing: bool = True,
+    ) -> dict[str, dict[str, float]]:
         """
         Evaluate the model on the given output and return the scores.
         Args:
@@ -76,10 +82,8 @@ class ContextGroundingEvaluator:
             rag_answer = output[query_id]
             references = documents[query_id]
             sentences_with_citations = tokenizer_with_citations(
-                self.sentence_tokenizer,
-                rag_answer,
-                doc_ids=references,
-                preprocessing=preprocessing)
+                self.sentence_tokenizer, rag_answer, doc_ids=references, preprocessing=preprocessing
+            )
             all_sentences[query_id] = sentences_with_citations
 
         # Computing grounding similarity
@@ -107,7 +111,7 @@ class ContextGroundingEvaluator:
         for query_id, count in zip(all_sentences, total_count):
             if count > 0:
                 entailment_score, contradiction_score, neutral_score = 0, 0, 0
-                for prediction in predictions[start_idx:start_idx+count]:
+                for prediction in predictions[start_idx : start_idx + count]:
                     entailment_score += prediction["entailment"]
                     contradiction_score += prediction["contradiction"]
                     neutral_score += prediction["neutral"]
@@ -120,7 +124,9 @@ class ContextGroundingEvaluator:
         # Logging the average scores
         logger.info("Averaging the scores achieved by the model ...")
         avg_entailment_score = sum([self.scores[query_id]["entailment"] for query_id in documents]) / len(documents)
-        avg_contradiction_score = sum([self.scores[query_id]["contradiction"] for query_id in documents]) / len(documents)
+        avg_contradiction_score = sum([self.scores[query_id]["contradiction"] for query_id in documents]) / len(
+            documents
+        )
         avg_neutral_score = sum([self.scores[query_id]["neutral"] for query_id in documents]) / len(documents)
         logger.info("-" * 50)
         logger.info(f"Avg Entailment:    {avg_entailment_score:8.4f}")

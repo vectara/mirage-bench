@@ -14,8 +14,8 @@ def load_jsonl(input_filepath: str) -> list[dict[str, str | list[str]]]:
     with open(input_filepath, encoding="utf-8") as fin:
         return [json.loads(row) for row in fin]
 
-def save_jsonl(output_filepath: str,
-               results: dict[str, dict[str, str | list[str]]]) -> None:
+
+def save_jsonl(output_filepath: str, results: dict[str, dict[str, str | list[str]]]) -> None:
     """
     Save the results of generated output (results[model_name] ...) in JSONL format.
     """
@@ -23,6 +23,6 @@ def save_jsonl(output_filepath: str,
     os.makedirs(os.path.dirname(output_filepath), exist_ok=True)
 
     # Save results in JSONL format
-    with open(output_filepath, 'w') as fout:
+    with open(output_filepath, "w") as fout:
         for idx in results:
-            fout.write(json.dumps(results[idx], ensure_ascii=False) + '\n')
+            fout.write(json.dumps(results[idx], ensure_ascii=False) + "\n")

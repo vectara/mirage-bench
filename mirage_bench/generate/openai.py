@@ -49,9 +49,6 @@
 #                 print(f"Error for query_id: {query_id}. Error: {e}")
 
 
-
-
-
 # if __name__ == '__main__':
 
 #     parser = argparse.ArgumentParser()

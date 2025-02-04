@@ -7,9 +7,7 @@ from .utils import load_jsonl
 
 
 class HFDataset:
-    def __init__(
-        self, dataset_name: str, language: str | None, split: str | None, cache_dir: str | None = "./cache"
-    ):
+    def __init__(self, dataset_name: str, language: str | None, split: str | None, cache_dir: str | None = "./cache"):
         self.dataset_name = dataset_name
         self.language = language
         self.split = split

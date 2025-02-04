@@ -25,7 +25,7 @@ def load_documents(dataset_name: str, language_code: str, split: str = "dev") ->
         # start from the first document until the second last one
         # Take the text between the two document ids: [doc_id] ..... [next_doc_id]
         for idx in range(len(sorted_doc_ids[:-1])):
-            doc_id, next_doc_id = sorted_doc_ids[idx], sorted_doc_ids[idx+1]
+            doc_id, next_doc_id = sorted_doc_ids[idx], sorted_doc_ids[idx + 1]
             doc_text = context.split(f"[{doc_id}]")[1].split(f"[{next_doc_id}]")[0].strip()
             documents_dict[query_id][doc_id] = doc_text
 
@@ -36,7 +36,8 @@ def load_documents(dataset_name: str, language_code: str, split: str = "dev") ->
 
     return documents_dict
 
-def load_predictions(dataset_name: str,  model_name: str, language_code: str, split: str = "dev") -> dict[str, str]:
+
+def load_predictions(dataset_name: str, model_name: str, language_code: str, split: str = "dev") -> dict[str, str]:
     predictions = {}
     hf_dataset = datasets.load_dataset(dataset_name, language_code, split=split)
 
@@ -49,9 +50,9 @@ def load_predictions(dataset_name: str,  model_name: str, language_code: str, sp
     return predictions
 
 
-def save_results(output_dir: str,
-                 results: dict[str, dict[str, str | list[str]]],
-                 filename: str | None = 'results.jsonl'):
+def save_results(
+    output_dir: str, results: dict[str, dict[str, str | list[str]]], filename: str | None = "results.jsonl"
+):
     """
     Save the results of generated output (results[model_name] ...) in JSONL format.
 
@@ -64,6 +65,6 @@ def save_results(output_dir: str,
     os.makedirs(os.path.dirname(output_dir), exist_ok=True)
 
     # Save results in JSONL format
-    with open(os.path.join(output_dir, filename), 'w') as f:
+    with open(os.path.join(output_dir, filename), "w") as f:
         for idx in results:
-            f.write(json.dumps(results[idx], ensure_ascii=False) + '\n')
+            f.write(json.dumps(results[idx], ensure_ascii=False) + "\n")

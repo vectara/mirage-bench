@@ -4,6 +4,7 @@ distributively on a multi-nodes cluster.
 
 Learn more about Ray Data in https://docs.ray.io/en/latest/data/data.html
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,14 +22,15 @@ from .dataset import HFDataset
 
 
 class HFModel:
-
     def __init__(self, model_name: str, cache_dir: str | None = "./cache"):
         self.model_name = model_name
         self.cache_dir = cache_dir
 
     def load_model(self):
         tokenizer = AutoTokenizer.from_pretrained(self.model_name, cache_dir=self.cache_dir, trust_remote_code=True)
-        temp_model = AutoModelForCausalLM.from_pretrained(self.model_name, cache_dir=self.cache_dir, trust_remote_code=True)
+        temp_model = AutoModelForCausalLM.from_pretrained(
+            self.model_name, cache_dir=self.cache_dir, trust_remote_code=True
+        )
         del temp_model
         return tokenizer
 
@@ -37,14 +39,15 @@ class LLMPredictor:
     def __init__(self):
         # Create an LLM.
         self.additional_keys = args.additional_keys
-        self.llm = LLM(model=args.model,
-                    max_model_len=args.max_model_len,
-                    max_num_seqs=1,
-                    max_seq_len_to_capture=args.max_model_len,
-                    download_dir=args.cache_dir,
-                    dtype="bfloat16",
-                    trust_remote_code=True)  # skip graph capturing for faster cold starts)
-
+        self.llm = LLM(
+            model=args.model,
+            max_model_len=args.max_model_len,
+            max_num_seqs=1,
+            max_seq_len_to_capture=args.max_model_len,
+            download_dir=args.cache_dir,
+            dtype="bfloat16",
+            trust_remote_code=True,
+        )  # skip graph capturing for faster cold starts)
 
     def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
         # Generate texts from the prompts.
@@ -55,7 +58,7 @@ class LLMPredictor:
         generated_text = []
         for output in outputs:
             prompt.append(output.prompt)
-            generated_text.append(' '.join([o.text for o in output.outputs]))
+            generated_text.append(" ".join([o.text for o in output.outputs]))
 
         output_dict = {"prompt": batch["prompt"], "output": generated_text}
         if self.additional_keys:
@@ -63,91 +66,102 @@ class LLMPredictor:
                 output_dict[key] = batch[key]
         return output_dict
 
+
 class VLLMGenerator(LLMPredictor):
+    def __init__(self, model_name: str, cache_dir: str | None = "./cache"):
+        super().__init__(model_name, cache_dir)
+        self.model_name = model_name
+        self.cache_dir = cache_dir
+        self.hf_model = HFModel(model_name, cache_dir)
 
-        def __init__(self, model_name: str, cache_dir: str | None = "./cache"):
-            super().__init__(model_name, cache_dir)
-            self.model_name = model_name
-            self.cache_dir = cache_dir
-            self.hf_model = HFModel(model_name, cache_dir)
+    def initialize(self):
+        self.tokenizer = self.hf_model.load_model()
+        self.llm = LLM(
+            model=self.model_name,
+            max_model_len=args.max_model_len,
+            max_num_seqs=1,
+            max_seq_len_to_capture=args.max_model_len,
+            download_dir=self.cache_dir,
+            dtype="bfloat16",
+            trust_remote_code=True,
+        )
 
-        def initialize(self):
-            self.tokenizer = self.hf_model.load_model()
-            self.llm = LLM(model=self.model_name,
-                        max_model_len=args.max_model_len,
-                        max_num_seqs=1,
-                        max_seq_len_to_capture=args.max_model_len,
-                        download_dir=self.cache_dir,
-                        dtype="bfloat16",
-                        trust_remote_code=True)
+        self.sampling_params = SamplingParams(
+            temperature=args.temperature,
+            max_tokens=args.max_new_tokens,
+            stop_token_ids=terminators if terminators else None,
+            stop=stop_strings if stop_strings else None,
+        )
 
-            self.sampling_params = SamplingParams(temperature=args.temperature,
-                                    max_tokens=args.max_new_tokens,
-                                    stop_token_ids=terminators if terminators else None,
-                                    stop=stop_strings if stop_strings else None,
-                                    )
+    def prepare_dataset(
+        self, dataset_name: str, language: str, split: str, filter_start: int = 0, filter_end: int = None
+    ):
+        hf_dataclass = HFDataset(dataset_name, language, split=split, cache_dir=self.cache_dir)
+        hf_dataclass.load_dataset()
+        hf_dataclass.format_prompt("prompt", "prompt_mistral", self.tokenizer)
+        hf_dataclass.filter_dataset(filter_start, filter_end)
+        return hf_dataclass.hf_dataset
 
-        def prepare_dataset(self, dataset_name: str, language: str, split: str, filter_start: int = 0, filter_end: int = None):
-            hf_dataclass = HFDataset(dataset_name, language, split=split, cache_dir=self.cache_dir)
-            hf_dataclass.load_dataset()
-            hf_dataclass.format_prompt("prompt", "prompt_mistral", self.tokenizer)
-            hf_dataclass.filter_dataset(filter_start, filter_end)
-            return hf_dataclass.hf_dataset
+    def batch_inference(
+        self,
+        dataset,
+        output_dir: str,
+        filename: str,
+        batch_size: int = 8,
+        num_gpus: int = 1,
+        concurrency: int = 4,
+        shards: int = 12,
+    ):
+        ds = ray.data.from_huggingface(dataset)
+        ds = ds.repartition(shards, shuffle=False)
+        ds = ds.map_batches(
+            self,
+            # Set the concurrency to the number of LLM instances.
+            concurrency=concurrency,
+            # Specify the number of GPUs required per LLM instance.
+            # NOTE: Do NOT set `num_gpus` when using vLLM with tensor-parallelism
+            # (i.e., `tensor_parallel_size`).
+            num_gpus=num_gpus,
+            # Specify the batch size for inference.
+            batch_size=batch_size,
+            zero_copy_batch=True,
+        )
+        outputs = ds.take_all()
 
-        def batch_inference(self, dataset, output_dir: str, filename: str, batch_size: int = 8, num_gpus: int = 1, concurrency: int = 4, shards: int = 12):
+        output_dict = {}
 
-            ds = ray.data.from_huggingface(dataset)
-            ds = ds.repartition(shards, shuffle=False)
-            ds = ds.map_batches(
-                self,
-                # Set the concurrency to the number of LLM instances.
-                concurrency=concurrency,
-                # Specify the number of GPUs required per LLM instance.
-                # NOTE: Do NOT set `num_gpus` when using vLLM with tensor-parallelism
-                # (i.e., `tensor_parallel_size`).
-                num_gpus=num_gpus,
-                # Specify the batch size for inference.
-                batch_size=batch_size,
-                zero_copy_batch=True,
+        for idx, output in enumerate(outputs):
+            generated_text = output["output"]
+            output_dict[idx] = {"outputs": {self.model_name: generated_text}, "prompt": output["prompt"]}
+            output_dict[idx].update(
+                {
+                    "query_id": output["query_id"],
+                    "positive_ids": list(output["positive_ids"]),
+                    "negative_ids": list(output["negative_ids"]),
+                }
             )
-            outputs = ds.take_all()
 
-            output_dict = {}
+    def generate(self, batch: dict[str, np.ndarray], sampling_params: SamplingParams) -> dict[str, list]:
+        # Generate texts from the prompts.
+        # The output is a list of RequestOutput objects that contain the prompt,
+        # generated text, and other information.
+        outputs = self.llm.generate(batch["prompt_mistral"], sampling_params)
+        prompt = []
+        generated_text = []
+        for output in outputs:
+            prompt.append(output.prompt)
+            generated_text.append(" ".join([o.text for o in output.outputs]))
 
-            for idx, output in enumerate(outputs):
-                generated_text = output["output"]
-                output_dict[idx] = {"outputs": {self.model_name: generated_text}, "prompt": output["prompt"]}
-                output_dict[idx].update({"query_id": output["query_id"],
-                                        "positive_ids": list(output["positive_ids"]),
-                                        "negative_ids": list(output["negative_ids"])})
-
-
-
-
-        def generate(self, batch: dict[str, np.ndarray], sampling_params: SamplingParams) -> dict[str, list]:
-            # Generate texts from the prompts.
-            # The output is a list of RequestOutput objects that contain the prompt,
-            # generated text, and other information.
-            outputs = self.llm.generate(batch["prompt_mistral"], sampling_params)
-            prompt = []
-            generated_text = []
-            for output in outputs:
-                prompt.append(output.prompt)
-                generated_text.append(' '.join([o.text for o in output.outputs]))
-
-            return {
-                "prompt": batch["prompt"],
-                "output": generated_text,
-                "query_id": batch["query_id"],
-                "positive_ids": batch["positive_ids"],
-                "negative_ids": batch["negative_ids"]
-            }
+        return {
+            "prompt": batch["prompt"],
+            "output": generated_text,
+            "query_id": batch["query_id"],
+            "positive_ids": batch["positive_ids"],
+            "negative_ids": batch["negative_ids"],
+        }
 
 
-
-
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--language", default=None)
     parser.add_argument("--temperature", required=False, type=float, default=0.3)
@@ -178,24 +192,26 @@ if __name__ == '__main__':
         terminators = [tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|eot_id|>")]
         stop_strings = ["<|eot_id|>"]
 
-    sampling_params = SamplingParams(temperature=args.temperature,
-                                    max_tokens=args.max_new_tokens,
-                                    stop_token_ids=terminators if terminators else None,
-                                    stop=stop_strings if stop_strings else None,
-                                    )
+    sampling_params = SamplingParams(
+        temperature=args.temperature,
+        max_tokens=args.max_new_tokens,
+        stop_token_ids=terminators if terminators else None,
+        stop=stop_strings if stop_strings else None,
+    )
 
     # Create a class to do batch inference.
     class LLMPredictor:
-
         def __init__(self):
             # Create an LLM.
-            self.llm = LLM(model=args.model,
-                        max_model_len=args.max_model_len,
-                        max_num_seqs=1,
-                        max_seq_len_to_capture=args.max_model_len,
-                        download_dir=args.cache_dir,
-                        dtype="bfloat16",
-                        trust_remote_code=True)  # skip graph capturing for faster cold starts)
+            self.llm = LLM(
+                model=args.model,
+                max_model_len=args.max_model_len,
+                max_num_seqs=1,
+                max_seq_len_to_capture=args.max_model_len,
+                download_dir=args.cache_dir,
+                dtype="bfloat16",
+                trust_remote_code=True,
+            )  # skip graph capturing for faster cold starts)
 
         def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
             # Generate texts from the prompts.
@@ -206,16 +222,15 @@ if __name__ == '__main__':
             generated_text = []
             for output in outputs:
                 prompt.append(output.prompt)
-                generated_text.append(' '.join([o.text for o in output.outputs]))
+                generated_text.append(" ".join([o.text for o in output.outputs]))
 
             return {
                 "prompt": batch["prompt"],
                 "output": generated_text,
                 "query_id": batch["query_id"],
                 "positive_ids": batch["positive_ids"],
-                "negative_ids": batch["negative_ids"]
+                "negative_ids": batch["negative_ids"],
             }
-
 
     # Read one text file from S3. Ray Data supports reading multiple files
     # from cloud storage (such as JSONL, Parquet, CSV, binary format).
@@ -241,8 +256,7 @@ if __name__ == '__main__':
         query_id = row["query_id"]
         positive_ids = row["positive_ids"]
         negative_ids = row["negative_ids"]
-        messages = [
-        {"role": "user", "content": f"{prompt}"}]
+        messages = [{"role": "user", "content": f"{prompt}"}]
         prompt_template = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         prompts.append(prompt_template)
 
@@ -285,9 +299,13 @@ if __name__ == '__main__':
     for idx, output in enumerate(outputs):
         generated_text = output["output"]
         output_dict[idx] = {"outputs": {args.model: generated_text}, "prompt": output["prompt"]}
-        output_dict[idx].update({"query_id": output["query_id"],
-                                  "positive_ids": list(output["positive_ids"]),
-                                  "negative_ids": list(output["negative_ids"])})
+        output_dict[idx].update(
+            {
+                "query_id": output["query_id"],
+                "positive_ids": list(output["positive_ids"]),
+                "negative_ids": list(output["negative_ids"]),
+            }
+        )
 
     os.makedirs(args.output_dir, exist_ok=True)
 
