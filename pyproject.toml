@@ -33,7 +33,9 @@ dependencies = [
     "transformers",
     "datasets",
     "stanza",
-    "sentencex"
+    "sentencex",
+    "lingua-language-detector",
+    "FlagEmbedding"
 ]
 
 [build-system]

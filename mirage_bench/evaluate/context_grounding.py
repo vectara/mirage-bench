@@ -60,29 +60,24 @@ class ContextGroundingEvaluator:
             self.sentence_tokenizer = SentenceXTokenizer(language_code=language_code)
 
     def evaluate(
-        self,
-        output: dict[str, str],
-        documents: dict[str, dict[str, str]],
-        batch_size: int = 128,
-        preprocessing: bool = True,
+        self, predictions: dict[str, str], documents: dict[str, dict[str, str]], batch_size: int = 128, **kwargs
     ) -> dict[str, dict[str, float]]:
         """
-        Evaluate the model on the given output and return the scores.
+        Evaluate the model on the given predictions and return the scores.
         Args:
-            output (dict): The output of the model, where the key is the query_id and the value is the RAG answer.
+            predictions (dict): The predictions of the model, where the key is the query_id and the value is the RAG answer.
             documents (dict): The document_id and document text for each query_id.
             batch_size (int): The batch size for computing the NLI scores.
-            preprocessing (bool): Whether to preprocess the text before computing the NLI scores.
         Returns:
             dict: The entailment, contrdiction and neutral scores for each query_id.
         """
         all_sentences = {query_id: {} for query_id in documents}
 
         for query_id in tqdm(documents, desc="Processing queries", total=len(documents)):
-            rag_answer = output[query_id]
+            rag_answer = predictions[query_id]
             references = documents[query_id]
             sentences_with_citations = tokenizer_with_citations(
-                self.sentence_tokenizer, rag_answer, doc_ids=references, preprocessing=preprocessing
+                self.sentence_tokenizer, rag_answer, doc_ids=references
             )
             all_sentences[query_id] = sentences_with_citations
 

@@ -7,6 +7,28 @@ import datasets
 from tqdm.auto import tqdm
 
 
+def load_queries(dataset_name: str, language_code: str, split: str = "dev") -> dict[str, str]:
+    queries = {}
+    hf_dataset = datasets.load_dataset(dataset_name, language_code, split=split)
+
+    for row in tqdm(hf_dataset, total=len(hf_dataset), desc="Loading queries"):
+        queries[row["query_id"]] = row["prompt"].split("Question:")[1].split("\n\nContexts:")[0].strip()
+
+    return queries
+
+
+def load_qrels(dataset_name: str, language_code: str, split: str = "dev") -> dict[str, dict[str, int]]:
+    qrels = {}
+    hf_dataset = datasets.load_dataset(dataset_name, language_code, split=split)
+
+    for row in tqdm(hf_dataset, total=len(hf_dataset), desc="Loading qrels"):
+        query_id = row["query_id"]
+        qrels[query_id] = {doc_id: 1 for doc_id in row["positive_ids"]}
+        qrels[query_id].update({doc_id: 0 for doc_id in row["negative_ids"]})
+
+    return qrels
+
+
 def load_documents(dataset_name: str, language_code: str, split: str = "dev") -> dict[str, str]:
     documents_dict = {}
     hf_dataset = datasets.load_dataset(dataset_name, language_code, split=split)
