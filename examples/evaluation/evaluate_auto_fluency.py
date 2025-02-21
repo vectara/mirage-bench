@@ -1,5 +1,5 @@
 """
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=4,5,6,7
 export HF_HOME=/mnt/users/n3thakur/cache
 export DATASETS_HF_HOME=/mnt/users/n3thakur/cache
 
@@ -8,6 +8,7 @@ for lang in en; do
     --judge "meta-llama/Meta-Llama-3-8B-Instruct" \
     --dataset_name "nthakur/mirage-eval" \
     --prediction_dataset "nthakur/mirage-eval-rag-output" \
+    --prediction_model "meta-llama/Meta-Llama-3-8B-Instruct" \
     --cache_dir "/mnt/users/n3thakur/cache" \
     --temperature 0.1 \
     --max_new_tokens 2048 \
@@ -30,12 +31,39 @@ logging.basicConfig(
 )
 #### /print debug information to stdout
 
+FLUENCY_PROMPT = """
+You will be given one summary written for a question and documents from Wikipedia in {{language}}.
+Your task is to rate the summary on one metric.
+Please make sure you read and understand these instructions carefully. Please keep this
+document open while reviewing, and refer to it as needed.\n\n
+Evaluation Criteria:
+Coherence (1-5) - the collective quality of all sentences. We align this dimension with
+the DUC quality question of structure and coherence whereby 'the summary should be
+well-structured and well-organized. The summary should not just be a heap of related information, but should build from sentence to sentence to a coherent body of information about a topic.'\n\n
+Evaluation Steps:
+1. Read the question and Wikipedia documents in {{language}} carefully and identify the main topic and key points.
+2. Read the summary and check whether it answers the question. Check if the summary covers the main
+topic and key points required to answer the question, and if it presents them in a clear and logical order.
+3. Assign a rating for coherence on a scale of 1 to 5 and provide an explanation, where 1 is the lowest and 5 is the highest
+based on the Evaluation Criteria.\n\n
+Example:
+Question in {{language}}:
+{{question}}\n
+Documents in {{language}}:
+{{documents}}\n
+Summary:
+{{rag_answer}}\n
+Provide an explanation and rate the coherence of the summary on a scale of 1 to 5 and provide an explanation for your rating.
+Please use the format of: ##Explanation: {explanation} ##Rating: {rating}.
+"""
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--language", default=None)
     parser.add_argument("--split", default="dev")
     parser.add_argument("--dataset_name", default=None)
     parser.add_argument("--prediction_dataset", default=None)
+    parser.add_argument("--prediction_model", default=None)
     parser.add_argument("--cache_dir", type=str, default=None, required=False)
     parser.add_argument("--judge", default="meta-llama/Meta-Llama-3-8B-Instruct", required=False)
     parser.add_argument("--batch_size", type=int, default=16, required=False)
@@ -76,7 +104,9 @@ if __name__ == "__main__":
         predictions=predictions,
         documents=documents,
         queries=queries,
+        prompt=FLUENCY_PROMPT,
         batch_size=args.batch_size,
         num_gpus=args.num_gpus,
         concurrency=args.concurrency,
+        postprocess_regex=r"Rating:(.*?)$",
     )

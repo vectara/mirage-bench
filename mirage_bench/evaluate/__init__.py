@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .automatic_answer_overlap import AutomaticAnswerOverlapEvaluator
 from .automatic_fluency import AutomaticFluencyEvaluator
 from .context_grounding import ContextGroundingEvaluator
 from .context_map_recall import ContextMAPRecallEvaluator
@@ -14,4 +15,5 @@ __all__ = [
     "LanguageDetectionEvaluator",
     "RerankerScoreEvaluator",
     "AutomaticFluencyEvaluator",
+    "AutomaticAnswerOverlapEvaluator",
 ]

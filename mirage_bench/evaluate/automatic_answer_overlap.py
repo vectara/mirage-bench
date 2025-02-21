@@ -10,39 +10,37 @@ from datasets import Dataset
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
-from .util import ISO_TO_LANG
+from .util import ISO_TO_LANG, parse_text_wo_citation
 from .vllm import LLMPredictor
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_FLUENCY_PROMPT = """
-You will be given one summary written for a question and documents from Wikipedia in {{language}}.
-Your task is to rate the summary on one metric.
-Please make sure you read and understand these instructions carefully. Please keep this
-document open while reviewing, and refer to it as needed.\n\n
-Evaluation Criteria:
-Coherence (1-5) - the collective quality of all sentences. We align this dimension with
-the DUC quality question of structure and coherence whereby 'the summary should be
-well-structured and well-organized. The summary should not just be a heap of related information, but should build from sentence to sentence to a coherent body of information about a topic.'\n\n
-Evaluation Steps:
-1. Read the question and Wikipedia documents in {{language}} carefully and identify the main topic and key points.
-2. Read the summary and check whether it answers the question. Check if the summary covers the main
-topic and key points required to answer the question, and if it presents them in a clear and logical order.
-3. Assign a rating for coherence on a scale of 1 to 5 and provide an explanation, where 1 is the lowest and 5 is the highest
-based on the Evaluation Criteria.\n\n
+DEFAULT_EVAL_PROMPT = """
+You are an AI assistant. In the following task, you are given a Question, a RAG application's response, and a Ground-truth Answer referred to as 'Label' in {{language}}.
+Assess how well the RAG application's response aligns with the Label, using the grading rubric below:\n\n
+1: The response is not aligned with the Label or is off-topic; includes hallucination.
+2: The response admits it cannot provide an answer or lacks context; honest.
+3: The response is relevant but contains notable discrepancies or inaccuracies.
+4: The response is acceptable, sufficient but not exhaustive.
+5: The response is fully accurate and comprehensive, based on the Label.\n\n
+Treat the Label as the definitive answer. Present your justification followed by your final score in the format: "[[score]]",
+----
 Example:
+Justification: The response partially aligns with the label but with some discrepancies. Score: [[3]]
+-----
 Question in {{language}}:
 {{question}}\n
-Documents in {{language}}:
-{{documents}}\n
-Summary:
-{{rag_answer}}\n
-Provide an explanation and rate the coherence of the summary on a scale of 1 to 5 and provide an explanation for your rating.
-Please use the format of: ##Explanation: {explanation} ##Rating: {rating}.
+
+Label in {{language}}:
+{{label}}\n
+
+RAG Application Response in {{language}}:
+{{response}}\n
+Treat the label as the definitive answer. Present your justification in English and followed by your final score in the format: "[[score]]",
 """
 
 
-class AutomaticFluencyEvaluator:
+class AutomaticAnswerOverlapEvaluator:
     def __init__(
         self,
         language_code: str,
@@ -54,9 +52,11 @@ class AutomaticFluencyEvaluator:
         max_new_tokens: int = 2048,
         temperature: float = 0.1,
         trust_remote_code: bool = True,
-        metric_name: str = "fluency_score",
+        answer_regex: str = r"Answer:(.*?)$",
+        metric_name: str = "answer_overlap",
     ):
         self.language_code = language_code
+        self.answer_regex = answer_regex
         self.metric_name = metric_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         terminators, stop_strings = self._get_terminators_and_stop_strings(model_name_or_path, self.tokenizer)
@@ -111,13 +111,14 @@ class AutomaticFluencyEvaluator:
     def evaluate(
         self,
         predictions: dict[str, str],
+        reference_predictions: dict[str, str],
         documents: dict[str, dict[str, str]],
         queries: dict[str, str],
-        prompt: str = DEFAULT_FLUENCY_PROMPT,
+        prompt: str = DEFAULT_EVAL_PROMPT,
         batch_size: int = 128,
         num_gpus: int = 1,
         concurrency: int = 4,
-        postprocess_regex: str = r"Rating:(.*?)$",  # regex to extract the rating from the raw prediction
+        postprocess_regex: str = r"Score:(.*?)$",  # regex to extract the rating from the raw prediction
         **kwargs,
     ) -> dict[str, dict[str, float]]:
         """
@@ -133,17 +134,17 @@ class AutomaticFluencyEvaluator:
 
         prompts = []
         for query_id in tqdm(documents, desc="Processing queries", total=len(documents)):
-            rag_answer = predictions[query_id].replace("##Reason:", "Reason:").replace("##Answer:", "Answer:")
-            doc_ids = documents[query_id]
-            document_text = ""
-            for doc_id in doc_ids:
-                document_text += f"[{doc_id}]: {documents[query_id][doc_id]}\n"
+            doc_ids = documents[query_id]  # get the doc_ids for the query_id
+            rag_answer = parse_text_wo_citation(predictions[query_id], regex=self.answer_regex, doc_ids=doc_ids)
+            reference_rag_answer = parse_text_wo_citation(
+                reference_predictions[query_id], regex=self.answer_regex, doc_ids=doc_ids
+            )
             query_text = queries[query_id]
             prompt = prompt.format(
                 language=ISO_TO_LANG[self.language_code].capitalize(),
                 question=query_text.strip(),
-                documents=document_text.strip(),
-                rag_answer=rag_answer,
+                label=reference_rag_answer.strip(),
+                response=rag_answer,
             )
             messages = [{"role": "user", "content": f"{prompt}"}]
             prompt_template = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -185,8 +186,8 @@ class AutomaticFluencyEvaluator:
         ### Logging the average scores
         logger.info("Averaging the scores achieved by the model ...")
         logger.info("-" * 50)
-        avg_fluency_score = sum([self.scores[query_id][self.metric_name] for query_id in documents]) / len(documents)
-        logger.info(f"Avg Fluency Score: {avg_fluency_score:8.4f}")
+        avg_score = sum([self.scores[query_id][self.metric_name] for query_id in documents]) / len(documents)
+        logger.info(f"Avg Answer Overlap Score: {avg_score:8.4f}")
         logger.info("-" * 50)
 
         return self.scores
