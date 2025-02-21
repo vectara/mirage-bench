@@ -6,30 +6,9 @@ import evaluate
 from multilingual_rouge import rouge_scorer
 from tqdm import tqdm
 
-from .util import parse_text_wo_citation
+from .util import ISO_TO_LANG, parse_text_wo_citation
 
 logger = logging.getLogger(__name__)
-
-ISO_TO_LANG = {
-    "ar": "arabic",
-    "bn": "bengali",
-    "hi": "hindi",
-    "en": "english",
-    "fi": "finnish",
-    "fr": "french",
-    "de": "german",
-    "ru": "russian",
-    "es": "spanish",
-    "zh": "chinese",
-    "th": "thai",
-    "ja": "japanese",
-    "sw": "swahili",
-    "yo": "yoruba",
-    "fa": "persian",
-    "id": "indonesian",
-    "ko": "korean",
-    "te": "telugu",
-}
 
 WITH_STEMMER = ["ar", "bn", "hi", "en", "fi", "fr", "de", "ru", "es"]
 WITHOUT_STEMMER = ["zh", "th", "ja"]

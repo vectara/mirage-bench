@@ -1,10 +1,11 @@
 """
 export CUDA_VISIBLE_DEVICES=4,5,6,7
+export NCCL_P2P_DISABLE=1
 export HF_HOME=/mnt/users/n3thakur/cache
 export DATASETS_HF_HOME=/mnt/users/n3thakur/cache
 
 for lang in en; do
-    python evaluate_automatic_fluency.py --language $lang --split dev \
+    python evaluate_auto_fluency.py --language $lang --split dev \
     --judge "meta-llama/Meta-Llama-3-8B-Instruct" \
     --dataset_name "nthakur/mirage-eval" \
     --prediction_dataset "nthakur/mirage-eval-rag-output" \
@@ -14,8 +15,8 @@ for lang in en; do
     --max_new_tokens 2048 \
     --max_model_len 4096 \
     --batch_size 16 \
-    --num_gpus 1 \
-    --concurrency 4
+    --tensor_parallel_size 4 \
+    --num_instances 1
 done
 """
 
@@ -54,7 +55,7 @@ Documents in {{language}}:
 Summary:
 {{rag_answer}}\n
 Provide an explanation and rate the coherence of the summary on a scale of 1 to 5 and provide an explanation for your rating.
-Please use the format of: ##Explanation: {explanation} ##Rating: {rating}.
+Please use the format of: ##Explanation: <explanation> ##Rating: <rating>.
 """
 
 if __name__ == "__main__":
@@ -71,14 +72,15 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, default=0.1, required=False)
     parser.add_argument("--dtype", type=str, default="bfloat16", required=False)
     parser.add_argument("--max_model_len", required=False, type=int, default=4096)
-    parser.add_argument("--num_gpus", type=int, default=1)
-    parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--tensor_parallel_size", type=int, default=1)
+    parser.add_argument("--num_instances", type=int, default=1)
     args = parser.parse_args()
 
     # Load the evaluator
     evaluator = AutomaticFluencyEvaluator(
         language_code=args.language,
         model_name_or_path=args.judge,
+        tensor_parallel_size=args.tensor_parallel_size,
         cache_dir=args.cache_dir,
         max_length=args.max_model_len,
         max_num_seqs=1,
@@ -106,7 +108,6 @@ if __name__ == "__main__":
         queries=queries,
         prompt=FLUENCY_PROMPT,
         batch_size=args.batch_size,
-        num_gpus=args.num_gpus,
-        concurrency=args.concurrency,
+        num_instances=args.num_instances,
         postprocess_regex=r"Rating:(.*?)$",
     )

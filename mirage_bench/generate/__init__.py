@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from .dataset import HFDataset
-from .openai import OpenAIGenerator
+from .anyscale import AnyScaleAPIClient
+from .claude import ClaudeAPIClient
+from .gemini import GeminiAPIClient
+from .openai import OpenAIClient
+from .vllm import VLLMClient
 
 __all__ = [
-    "HFDataset",
-    "OpenAIGenerator",
+    "AnyScaleAPIClient",
+    "ClaudeAPIClient",
+    "GeminiAPIClient",
+    "OpenAIClient",
+    "VLLMClient",
 ]

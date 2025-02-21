@@ -35,7 +35,9 @@ dependencies = [
     "stanza",
     "sentencex",
     "lingua-language-detector",
-    "FlagEmbedding"
+    "FlagEmbedding",
+    "anthropic",
+    "google-generativeai",
 ]
 
 [build-system]

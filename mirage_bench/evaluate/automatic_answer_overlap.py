@@ -5,13 +5,11 @@ import logging
 import os
 import re
 
-import ray
-from datasets import Dataset
 from tqdm import tqdm
-from transformers import AutoTokenizer
+
+from mirage_bench.generate import VLLMClient
 
 from .util import ISO_TO_LANG, parse_text_wo_citation
-from .vllm import LLMPredictor
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +43,7 @@ class AutomaticAnswerOverlapEvaluator:
         self,
         language_code: str,
         model_name_or_path: str = "meta-llama/Meta-Llama-3-8B-Instruct",
+        tensor_parallel_size: int = 1,
         cache_dir: str = None,
         max_length: int = 8192,
         max_num_seqs: int = 1,
@@ -54,34 +53,27 @@ class AutomaticAnswerOverlapEvaluator:
         trust_remote_code: bool = True,
         answer_regex: str = r"Answer:(.*?)$",
         metric_name: str = "answer_overlap",
+        prompt_key: str = "prompt",
+        additional_keys: list[str] = None,
     ):
         self.language_code = language_code
         self.answer_regex = answer_regex
         self.metric_name = metric_name
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-        terminators, stop_strings = self._get_terminators_and_stop_strings(model_name_or_path, self.tokenizer)
-
-        self.llm_predictor = LLMPredictor(
+        self.vllm_client = VLLMClient(
             model_name_or_path=model_name_or_path,
+            cache_dir=cache_dir,
+            tensor_parallel_size=tensor_parallel_size,
+            prompt_key=prompt_key,
+            additional_keys=additional_keys,
             max_model_len=max_length,
             max_num_seqs=max_num_seqs,
-            cache_dir=cache_dir,
             dtype=dtype,
             trust_remote_code=trust_remote_code,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
-            terminators=terminators,
-            stop_strings=stop_strings,
         )
         self.scores = None
         self.raw_predictions = None
-
-    def _get_terminators_and_stop_strings(self, model_name, tokenizer):
-        terminators, stop_strings = [], []
-        if "llama-3" in model_name:
-            terminators = [tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|eot_id|>")]
-            stop_strings = ["<|eot_id|>"]
-        return terminators, stop_strings
 
     def postprocess(raw_prediction: str, regex: str) -> str:
         rating = 0
@@ -117,7 +109,8 @@ class AutomaticAnswerOverlapEvaluator:
         prompt: str = DEFAULT_EVAL_PROMPT,
         batch_size: int = 128,
         num_gpus: int = 1,
-        concurrency: int = 4,
+        num_instances: int = 1,
+        shards: int = 12,
         postprocess_regex: str = r"Score:(.*?)$",  # regex to extract the rating from the raw prediction
         **kwargs,
     ) -> dict[str, dict[str, float]]:
@@ -140,41 +133,20 @@ class AutomaticAnswerOverlapEvaluator:
                 reference_predictions[query_id], regex=self.answer_regex, doc_ids=doc_ids
             )
             query_text = queries[query_id]
-            prompt = prompt.format(
-                language=ISO_TO_LANG[self.language_code].capitalize(),
-                question=query_text.strip(),
-                label=reference_rag_answer.strip(),
-                response=rag_answer,
-            )
-            messages = [{"role": "user", "content": f"{prompt}"}]
-            prompt_template = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-            prompts.append(prompt_template)
+            prompt = prompt.replace("{{language}}", ISO_TO_LANG[self.language_code].capitalize())
+            prompt = prompt.replace("{{question}}", query_text.strip())
+            prompt = prompt.replace("{{label}}", reference_rag_answer.strip())
+            prompt = prompt.replace("{{response}}", rag_answer)
+            prompts.append(prompt)
 
-        hf_dataset = {"prompt": prompts, "query_id": list(documents.keys())}
-        hf_dataset = Dataset.from_dict(hf_dataset)
-
-        # Convert the Huggingface dataset to Ray Data.
-        ds = ray.data.from_huggingface(hf_dataset)
-
-        # Apply batch inference for all input data.
-        ds = ds.repartition(12, shuffle=False)
-
-        ds = ds.map_batches(
-            LLMPredictor,
-            # Set the concurrency to the number of LLM instances.
-            concurrency=concurrency,
-            # Specify the number of GPUs required per LLM instance.
-            # NOTE: Do NOT set `num_gpus` when using vLLM with tensor-parallelism
-            # (i.e., `tensor_parallel_size`).
-            num_gpus=num_gpus,
-            # Specify the batch size for inference.
+        outputs = self.vllm_client.batch_call(
+            prompts=prompts,
+            query_ids=list(documents.keys()),
             batch_size=batch_size,
-            zero_copy_batch=True,
+            num_gpus=num_gpus,
+            num_instances=num_instances,
+            shards=shards,
         )
-
-        # NOTE: This is for local testing and debugging. For production use case,
-        # one should write full result out as shown below.
-        outputs = ds.take_all()
 
         for output in outputs:
             query_id = output["query_id"]

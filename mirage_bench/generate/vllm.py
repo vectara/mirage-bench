@@ -1,313 +1,181 @@
-"""
-This example shows how to use Ray Data for running offline batch inference
-distributively on a multi-nodes cluster.
-
-Learn more about Ray Data in https://docs.ray.io/en/latest/data/data.html
-"""
-
 from __future__ import annotations
 
-import argparse
-import os
+import logging
 
-import datasets
 import numpy as np
 import ray
+from datasets import Dataset
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from vllm import LLM, SamplingParams
 
-from mirage_bench.util import save_results
-
-from .dataset import HFDataset
+logger = logging.getLogger(__name__)
 
 
 class HFModel:
-    def __init__(self, model_name: str, cache_dir: str | None = "./cache"):
-        self.model_name = model_name
+    def __init__(self, model_name_or_path: str, cache_dir: str | None = "./cache"):
+        self.model_name_or_path = model_name_or_path
         self.cache_dir = cache_dir
-
-    def load_model(self):
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name, cache_dir=self.cache_dir, trust_remote_code=True)
-        temp_model = AutoModelForCausalLM.from_pretrained(
-            self.model_name, cache_dir=self.cache_dir, trust_remote_code=True
+        logger.info(f"Initializing Huggingface Model: {model_name_or_path}")
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_name_or_path, cache_dir=self.cache_dir, trust_remote_code=True
         )
-        del temp_model
-        return tokenizer
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path, cache_dir=self.cache_dir, trust_remote_code=True
+        )
+        del model
+
+    def _get_terminators_and_stop_strings(self) -> tuple[list[int], list[str]]:
+        terminators, stop_strings = [], []
+        if "llama-3" in self.model_name_or_path.lower():
+            terminators = [self.tokenizer.eos_token_id, self.tokenizer.convert_tokens_to_ids("<|eot_id|>")]
+            stop_strings = ["<|eot_id|>"]
+        return terminators, stop_strings
 
 
+# Create a class to do batch inference.
 class LLMPredictor:
-    def __init__(self):
+    def __init__(
+        self,
+        model_name_or_path: str,
+        tensor_parallel_size: int = 1,
+        prompt_key: str = "prompt",
+        max_model_len: int = 4096,
+        max_num_seqs: int = 1,
+        cache_dir: str = None,
+        dtype: str = "bfloat16",
+        trust_remote_code: bool = True,
+        max_new_tokens: int = 2048,
+        temperature: float = 0.1,
+        terminators: list[int] = None,
+        stop_strings: list[str] = None,
+        additional_keys: list[str] = None,
+    ):
+        self.prompt_key = prompt_key
+        self.additional_keys = additional_keys
+        self.sampling_params = SamplingParams(
+            temperature=temperature,
+            max_tokens=max_new_tokens,
+            stop_token_ids=terminators if terminators else None,
+            stop=stop_strings if stop_strings else None,
+        )
         # Create an LLM.
-        self.additional_keys = args.additional_keys
         self.llm = LLM(
-            model=args.model,
-            max_model_len=args.max_model_len,
-            max_num_seqs=1,
-            max_seq_len_to_capture=args.max_model_len,
-            download_dir=args.cache_dir,
-            dtype="bfloat16",
-            trust_remote_code=True,
+            model=model_name_or_path,
+            tokenizer=model_name_or_path,
+            tokenizer_mode="auto",
+            tensor_parallel_size=tensor_parallel_size,
+            dtype=dtype,
+            max_model_len=max_model_len,
+            max_num_seqs=max_num_seqs,
+            max_seq_len_to_capture=max_model_len,
+            download_dir=cache_dir,
+            trust_remote_code=trust_remote_code,
         )  # skip graph capturing for faster cold starts)
 
     def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
         # Generate texts from the prompts.
         # The output is a list of RequestOutput objects that contain the prompt,
         # generated text, and other information.
-        outputs = self.llm.generate(batch["prompt_mistral"], sampling_params)
-        prompt = []
-        generated_text = []
+        outputs = self.llm.generate(batch[self.prompt_key], self.sampling_params)
+        prompt: list[str] = []
+        generated_text: list[str] = []
         for output in outputs:
             prompt.append(output.prompt)
             generated_text.append(" ".join([o.text for o in output.outputs]))
-
-        output_dict = {"prompt": batch["prompt"], "output": generated_text}
+        output_dict = {"output": generated_text, "query_id": batch["query_id"], "prompt": prompt}
         if self.additional_keys:
             for key in self.additional_keys:
                 output_dict[key] = batch[key]
         return output_dict
 
 
-class VLLMGenerator(LLMPredictor):
-    def __init__(self, model_name: str, cache_dir: str | None = "./cache"):
-        super().__init__(model_name, cache_dir)
-        self.model_name = model_name
-        self.cache_dir = cache_dir
-        self.hf_model = HFModel(model_name, cache_dir)
-
-    def initialize(self):
-        self.tokenizer = self.hf_model.load_model()
-        self.llm = LLM(
-            model=self.model_name,
-            max_model_len=args.max_model_len,
-            max_num_seqs=1,
-            max_seq_len_to_capture=args.max_model_len,
-            download_dir=self.cache_dir,
-            dtype="bfloat16",
-            trust_remote_code=True,
-        )
-
-        self.sampling_params = SamplingParams(
-            temperature=args.temperature,
-            max_tokens=args.max_new_tokens,
-            stop_token_ids=terminators if terminators else None,
-            stop=stop_strings if stop_strings else None,
-        )
-
-    def prepare_dataset(
-        self, dataset_name: str, language: str, split: str, filter_start: int = 0, filter_end: int = None
-    ):
-        hf_dataclass = HFDataset(dataset_name, language, split=split, cache_dir=self.cache_dir)
-        hf_dataclass.load_dataset()
-        hf_dataclass.format_prompt("prompt", "prompt_mistral", self.tokenizer)
-        hf_dataclass.filter_dataset(filter_start, filter_end)
-        return hf_dataclass.hf_dataset
-
-    def batch_inference(
+class VLLMClient:
+    def __init__(
         self,
-        dataset,
-        output_dir: str,
-        filename: str,
-        batch_size: int = 8,
-        num_gpus: int = 1,
-        concurrency: int = 4,
-        shards: int = 12,
+        model_name_or_path: str,
+        cache_dir: str | None = "./cache",
+        prompt_key: str = "prompt",
+        additional_keys: list[str] = None,
+        tensor_parallel_size: int = 1,
+        **kwargs,
     ):
-        ds = ray.data.from_huggingface(dataset)
-        ds = ds.repartition(shards, shuffle=False)
+        self.hf_model = HFModel(model_name_or_path, cache_dir)
+        self.tensor_parallel_size = tensor_parallel_size
+        terminators, stop_strings = self.hf_model._get_terminators_and_stop_strings()
+        self.fn_kwargs = {
+            "tensor_parallel_size": tensor_parallel_size,
+            "prompt_key": prompt_key,
+            "additional_keys": additional_keys,
+            "cache_dir": cache_dir,
+            "terminators": terminators,
+            "stop_strings": stop_strings,
+        }
+        self.fn_kwargs.update(kwargs)
+        self.model_name_or_path = model_name_or_path
+
+    # For tensor_parallel_size > 1, we need to create placement groups for vLLM
+    # to use. Every actor has to have its own placement group.
+    def scheduling_strategy_fn(self):
+        # One bundle per tensor parallel worker
+        pg = ray.util.placement_group(
+            [{"GPU": 1, "CPU": 1}] * self.tensor_parallel_size,
+            strategy="STRICT_PACK",
+        )
+        return dict(scheduling_strategy=PlacementGroupSchedulingStrategy(pg, placement_group_capture_child_tasks=True))
+
+    def batch_call(
+        self,
+        prompts: list[str],
+        query_ids: list[str] = None,
+        batch_size: int = 8,
+        num_instances: int = 1,
+        shards: int = 12,
+        **kwargs,
+    ):
+        prompts_final = []
+        for prompt in prompts:
+            messages = [{"role": "user", "content": f"{prompt}"}]
+            prompt_template = self.hf_model.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            prompts_final.append(prompt_template)
+
+        logger.info("Coverted dataset into HF format ...")
+        hf_dataset = {"query_id": query_ids, "prompt": prompts_final}
+        hf_dataset = Dataset.from_dict(hf_dataset)
+        logger.info(f"Example: {hf_dataset[0]}")
+
+        # Convert the Huggingface dataset to Ray Data.
+        ds = ray.data.from_huggingface(hf_dataset)
+
+        # Apply batch inference for all input data.
+        ds.repartition(shards, shuffle=False)
+
+        resources_kwarg = {}
+        if self.tensor_parallel_size == 1:
+            # For tensor_parallel_size == 1, we simply set num_gpus=1.
+            resources_kwarg["num_gpus"] = 1
+        else:
+            # Otherwise, we have to set num_gpus=0 and provide
+            # a function that will create a placement group for
+            # each instance.
+            resources_kwarg["num_gpus"] = 0
+            resources_kwarg["ray_remote_args_fn"] = self.scheduling_strategy_fn
+
+        # log the function arguments passed to VLLM
+        logger.info(f"Function arguments passed to VLLM: {self.fn_kwargs}")
+
         ds = ds.map_batches(
-            self,
+            LLMPredictor,
+            # Pass the function arguments.
+            fn_constructor_args=(self.model_name_or_path,),
+            fn_constructor_kwargs=self.fn_kwargs,
             # Set the concurrency to the number of LLM instances.
-            concurrency=concurrency,
-            # Specify the number of GPUs required per LLM instance.
-            # NOTE: Do NOT set `num_gpus` when using vLLM with tensor-parallelism
-            # (i.e., `tensor_parallel_size`).
-            num_gpus=num_gpus,
+            concurrency=num_instances,
             # Specify the batch size for inference.
             batch_size=batch_size,
-            zero_copy_batch=True,
+            **resources_kwarg,
         )
         outputs = ds.take_all()
-
-        output_dict = {}
-
-        for idx, output in enumerate(outputs):
-            generated_text = output["output"]
-            output_dict[idx] = {"outputs": {self.model_name: generated_text}, "prompt": output["prompt"]}
-            output_dict[idx].update(
-                {
-                    "query_id": output["query_id"],
-                    "positive_ids": list(output["positive_ids"]),
-                    "negative_ids": list(output["negative_ids"]),
-                }
-            )
-
-    def generate(self, batch: dict[str, np.ndarray], sampling_params: SamplingParams) -> dict[str, list]:
-        # Generate texts from the prompts.
-        # The output is a list of RequestOutput objects that contain the prompt,
-        # generated text, and other information.
-        outputs = self.llm.generate(batch["prompt_mistral"], sampling_params)
-        prompt = []
-        generated_text = []
-        for output in outputs:
-            prompt.append(output.prompt)
-            generated_text.append(" ".join([o.text for o in output.outputs]))
-
-        return {
-            "prompt": batch["prompt"],
-            "output": generated_text,
-            "query_id": batch["query_id"],
-            "positive_ids": batch["positive_ids"],
-            "negative_ids": batch["negative_ids"],
-        }
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--language", default=None)
-    parser.add_argument("--temperature", required=False, type=float, default=0.3)
-    parser.add_argument("--model", default="mistralai/Mistral-7B-Instruct-v0.2")
-    parser.add_argument("--max_new_tokens", required=False, type=int, default=4096)
-    parser.add_argument("--max_model_len", required=False, type=int, default=4096)
-    parser.add_argument("--top_p", required=False, type=float, default=0.95)
-    parser.add_argument("--cache_dir", default=None)
-    parser.add_argument("--dataset_name", default=None)
-    parser.add_argument("--split", default="train")
-    parser.add_argument("--output_dir", default=None)
-    parser.add_argument("--filename", default=False)
-    parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--num_gpus", type=int, default=1)
-    parser.add_argument("--concurrency", type=int, default=4)
-    parser.add_argument("--filter_start", type=int, default=0)
-    parser.add_argument("--filter_end", type=int, default=None)
-
-    args = parser.parse_args()
-
-    tokenizer = AutoTokenizer.from_pretrained(args.model, cache_dir=args.cache_dir, trust_remote_code=True)
-    temp_model = AutoModelForCausalLM.from_pretrained(args.model, cache_dir=args.cache_dir, trust_remote_code=True)
-    del temp_model
-
-    # Create a sampling params object.
-    terminators, stop_strings = [], []
-    if "llama-3" in args.model.lower():
-        terminators = [tokenizer.eos_token_id, tokenizer.convert_tokens_to_ids("<|eot_id|>")]
-        stop_strings = ["<|eot_id|>"]
-
-    sampling_params = SamplingParams(
-        temperature=args.temperature,
-        max_tokens=args.max_new_tokens,
-        stop_token_ids=terminators if terminators else None,
-        stop=stop_strings if stop_strings else None,
-    )
-
-    # Create a class to do batch inference.
-    class LLMPredictor:
-        def __init__(self):
-            # Create an LLM.
-            self.llm = LLM(
-                model=args.model,
-                max_model_len=args.max_model_len,
-                max_num_seqs=1,
-                max_seq_len_to_capture=args.max_model_len,
-                download_dir=args.cache_dir,
-                dtype="bfloat16",
-                trust_remote_code=True,
-            )  # skip graph capturing for faster cold starts)
-
-        def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
-            # Generate texts from the prompts.
-            # The output is a list of RequestOutput objects that contain the prompt,
-            # generated text, and other information.
-            outputs = self.llm.generate(batch["prompt_mistral"], sampling_params)
-            prompt = []
-            generated_text = []
-            for output in outputs:
-                prompt.append(output.prompt)
-                generated_text.append(" ".join([o.text for o in output.outputs]))
-
-            return {
-                "prompt": batch["prompt"],
-                "output": generated_text,
-                "query_id": batch["query_id"],
-                "positive_ids": batch["positive_ids"],
-                "negative_ids": batch["negative_ids"],
-            }
-
-    # Read one text file from S3. Ray Data supports reading multiple files
-    # from cloud storage (such as JSONL, Parquet, CSV, binary format).
-    # ds = ray.data.read_text("s3://anonymous@air-example-data/prompts.txt")
-    hf_dataset = datasets.load_dataset(args.dataset_name, args.language, split=args.split, cache_dir=args.cache_dir)
-    # datasets_list = [datasets.Dataset.from_list(load_jsonl_file(i)) for i in .dataset_name]
-    # hf_dataset = datasets.concatenate_datasets(datasets_list)
-
-    if args.filter_end is None:
-        args.filter_end = len(hf_dataset)
-
-    print(f"Loaded {len(hf_dataset)} prompts for {args.language}...")
-    output_filepath = f"{args.filename}-{args.filter_start}-{args.filter_end}.jsonl"
-
-    if os.path.exists(os.path.join(args.output_dir, output_filepath)):
-        print(f"File {output_filepath} already exists. No need to rerun the experiment.")
-        exit(0)
-
-    prompts = []
-
-    for idx, row in enumerate(hf_dataset):
-        prompt = row["prompt"]
-        query_id = row["query_id"]
-        positive_ids = row["positive_ids"]
-        negative_ids = row["negative_ids"]
-        messages = [{"role": "user", "content": f"{prompt}"}]
-        prompt_template = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        prompts.append(prompt_template)
-
-    hf_dataset = hf_dataset.add_column("prompt_mistral", prompts)
-
-    if args.filter_start > len(prompts):
-        print("Filter start is greater than the number of prompts. Exiting...")
-        exit(0)
-    elif args.filter_end > len(prompts):
-        args.filter_end = len(prompts)
-
-    hf_dataset = hf_dataset.select(range(args.filter_start, args.filter_end))
-
-    # Convert the Huggingface dataset to Ray Data.
-    ds = ray.data.from_huggingface(hf_dataset)
-
-    # Apply batch inference for all input data.
-    ds = ds.repartition(12, shuffle=False)
-
-    ds = ds.map_batches(
-        LLMPredictor,
-        # Set the concurrency to the number of LLM instances.
-        concurrency=args.concurrency,
-        # Specify the number of GPUs required per LLM instance.
-        # NOTE: Do NOT set `num_gpus` when using vLLM with tensor-parallelism
-        # (i.e., `tensor_parallel_size`).
-        num_gpus=args.num_gpus,
-        # Specify the batch size for inference.
-        batch_size=args.batch_size,
-        zero_copy_batch=True,
-    )
-
-    # Peek first 10 results.
-    # NOTE: This is for local testing and debugging. For production use case,
-    # one should write full result out as shown below.
-    outputs = ds.take_all()
-
-    output_dict = {}
-
-    for idx, output in enumerate(outputs):
-        generated_text = output["output"]
-        output_dict[idx] = {"outputs": {args.model: generated_text}, "prompt": output["prompt"]}
-        output_dict[idx].update(
-            {
-                "query_id": output["query_id"],
-                "positive_ids": list(output["positive_ids"]),
-                "negative_ids": list(output["negative_ids"]),
-            }
-        )
-
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    # Save the results in JSONL format.
-    save_results(args.output_dir, output_dict, f"{args.filename}-{args.filter_start}-{args.filter_end}.jsonl")
+        return outputs
