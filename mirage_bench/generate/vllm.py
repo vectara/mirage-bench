@@ -94,6 +94,7 @@ class VLLMClient:
     def __init__(
         self,
         model_name_or_path: str,
+        wait: int = 5,
         cache_dir: str | None = "./cache",
         prompt_key: str = "prompt",
         additional_keys: list[str] = None,
