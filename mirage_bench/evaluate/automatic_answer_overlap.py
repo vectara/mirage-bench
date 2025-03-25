@@ -52,7 +52,7 @@ class AutomaticAnswerOverlapEvaluator:
         temperature: float = 0.1,
         trust_remote_code: bool = True,
         answer_regex: str = r"Answer:(.*?)$",
-        metric_name: str = "answer_overlap",
+        metric_name: str = "answer_overlap_score",
         prompt_key: str = "prompt",
         additional_keys: list[str] = None,
     ):

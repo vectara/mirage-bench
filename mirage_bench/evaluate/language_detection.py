@@ -70,14 +70,14 @@ class LanguageDetectionEvaluator:
                 if detected_lang == self.language_code:
                     self.scores[query_id]["target_language"] = detected_langs[self.language_code]
                 if detected_lang == "en":
-                    self.scores[query_id]["english"] = detected_langs["en"]
+                    self.scores[query_id]["english_language"] = detected_langs["en"]
                 else:
-                    self.scores[query_id]["other"] += detected_langs[detected_lang]
+                    self.scores[query_id]["other_language"] += detected_langs[detected_lang]
 
         # compute the average scores
         avg_target_lang = sum([self.scores[query_id]["target_language"] for query_id in self.scores]) / len(documents)
-        avg_english = sum([self.scores[query_id]["english"] for query_id in self.scores]) / len(documents)
-        avg_other = sum([self.scores[query_id]["other"] for query_id in self.scores]) / len(documents)
+        avg_english = sum([self.scores[query_id]["english_language"] for query_id in self.scores]) / len(documents)
+        avg_other = sum([self.scores[query_id]["other_language"] for query_id in self.scores]) / len(documents)
 
         logger.info("Averaging the scores achieved by the model ...")
         logger.info("-" * 50)

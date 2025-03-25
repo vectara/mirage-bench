@@ -1,11 +1,11 @@
 """
-export HF_HOME=/mnt/users/n3thakur/cache
-export DATASETS_HF_HOME=/mnt/users/n3thakur/cache
+export HF_HOME=<your_cache_dir>
+export DATASETS_HF_HOME=<your_cache_dir>
 
 for lang in en; do
     python evaluate_answer_rouge_blue.py --language $lang --split dev \
-    --dataset_name "nthakur/mirage-eval" \
-    --prediction_dataset "nthakur/mirage-eval-rag-output" \
+    --dataset_name "nthakur/nthakur/mirage-bench" \
+    --prediction_dataset "nthakur/nthakur/mirage-bench-output" \
     --prediction_model "meta-llama/Meta-Llama-3-8B-Instruct" \
     --reference_model "gpt-4-azure"
 done

@@ -1,17 +1,17 @@
 """
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3 (or any other GPU configuration)
 export NCCL_P2P_DISABLE=1
-export HF_HOME=/mnt/users/n3thakur/cache
-export DATASETS_HF_HOME=/mnt/users/n3thakur/cache
+export HF_HOME=<your_cache_dir>
+export DATASETS_HF_HOME=<your_cache_dir>
 
 for lang in en; do
     python evaluate_auto_answer_overlap.py --language $lang --split dev \
     --judge "meta-llama/Meta-Llama-3-8B-Instruct" \
-    --dataset_name "nthakur/mirage-eval" \
-    --prediction_dataset "nthakur/mirage-eval-rag-output" \
+    --dataset_name "nthakur/mirage-bench" \
+    --prediction_dataset "nthakur/mirage-bench-output" \
     --prediction_model "meta-llama/Meta-Llama-3-8B-Instruct" \
     --reference_model "gpt-4-azure" \
-    --cache_dir "/mnt/users/n3thakur/cache" \
+    --cache_dir "<your_cache_dir>" \
     --temperature 0.1 \
     --max_new_tokens 2048 \
     --max_model_len 4096 \

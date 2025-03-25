@@ -1,18 +1,18 @@
 """
 export OMP_NUM_THREADS=6
 export OUTPUT_PATH=/u3/n3thakur/projects/vectara/vectara-translation/datasets
-export HF_HOME=/u3/n3thakur/projects/cache
-export DATASETS_HF_HOME=/u3/n3thakur/projects/cache
+export HF_HOME=<your_cache_dir>
+export DATASETS_HF_HOME=<your_cache_dir>
 export AZURE_OPENAI_ENDPOINT="xxxxx"
 export AZURE_OPENAI_API_KEY="xxxx"
 
 for lang in en; do
-for model in gpt-3.5-turbo-azure
+for model in gpt-4o-azure
 do
     python examples/generation/openai_inference.py --language $lang --split dev \
     --model $model \
-    --cache_dir /u3/n3thakur/projects/cache \
-    --dataset_name "nthakur/mirage-eval" \
+    --cache_dir <your_cache_dir> \
+    --dataset_name "nthakur/mirage-bench" \
     --output_dir $OUTPUT_PATH/$model/mirage-eval-test/ \
     --filename $lang-mirage-eval-raft-eval-dev  --temperature 0.1 \
     --batch_size 12  --num_gpus 1 --concurrency 1 --filter_start 0
@@ -21,7 +21,7 @@ done done
 
 import argparse
 
-from mirage_bench.generate import HFDataset
+from mirage_bench.dataset import HFDataset
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

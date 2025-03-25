@@ -100,29 +100,34 @@ class ContextGroundingEvaluator:
         logger.info(f"Evaluating with model: {self.xnli_model}")
         predictions = self.xnli_model.predict(premises, hypothesis, batch_size=batch_size)
         if not self.scores:
-            self.scores = {query_id: {"entailment": 0, "contradiction": 0, "neutral": 0} for query_id in documents}
+            self.scores = {
+                query_id: {"support_entailment": 0, "support_contradiction": 0, "support_neutral": 0}
+                for query_id in documents
+            }
 
         start_idx = 0
         for query_id, count in zip(all_sentences, total_count):
             if count > 0:
                 entailment_score, contradiction_score, neutral_score = 0, 0, 0
                 for prediction in predictions[start_idx : start_idx + count]:
-                    entailment_score += prediction["entailment"]
-                    contradiction_score += prediction["contradiction"]
-                    neutral_score += prediction["neutral"]
+                    entailment_score += prediction["support_entailment"]
+                    contradiction_score += prediction["support_contradiction"]
+                    neutral_score += prediction["support_neutral"]
 
-                self.scores[query_id]["entailment"] += round(entailment_score / count, 4)
-                self.scores[query_id]["contradiction"] += round(contradiction_score / count, 4)
-                self.scores[query_id]["neutral"] += round(neutral_score / count, 4)
+                self.scores[query_id]["support_entailment"] += round(entailment_score / count, 4)
+                self.scores[query_id]["support_contradiction"] += round(contradiction_score / count, 4)
+                self.scores[query_id]["support_neutral"] += round(neutral_score / count, 4)
                 start_idx += count
 
         # Logging the average scores
         logger.info("Averaging the scores achieved by the model ...")
-        avg_entailment_score = sum([self.scores[query_id]["entailment"] for query_id in documents]) / len(documents)
-        avg_contradiction_score = sum([self.scores[query_id]["contradiction"] for query_id in documents]) / len(
+        avg_entailment_score = sum([self.scores[query_id]["support_entailment"] for query_id in documents]) / len(
             documents
         )
-        avg_neutral_score = sum([self.scores[query_id]["neutral"] for query_id in documents]) / len(documents)
+        avg_contradiction_score = sum(
+            [self.scores[query_id]["support_contradiction"] for query_id in documents]
+        ) / len(documents)
+        avg_neutral_score = sum([self.scores[query_id]["support_neutral"] for query_id in documents]) / len(documents)
         logger.info("-" * 50)
         logger.info(f"Avg Entailment:    {avg_entailment_score:8.4f}")
         logger.info(f"Avg Neutral:       {avg_neutral_score:8.4f}")

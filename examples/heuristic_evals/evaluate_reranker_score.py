@@ -1,15 +1,15 @@
 """
-export CUDA_VISIBLE_DEVICES=-1
-export HF_HOME=/mnt/users/n3thakur/cache
-export DATASETS_HF_HOME=/mnt/users/n3thakur/cache
+export CUDA_VISIBLE_DEVICES=0 (or any other GPU configuration)
+export HF_HOME=<your_cache_dir>
+export DATASETS_HF_HOME=<your_cache_dir>
 
 for lang in en; do
     python evaluate_reranker_score.py --language $lang --split dev \
-    --dataset_name "nthakur/mirage-eval" \
-    --prediction_dataset "nthakur/mirage-eval-rag-output" \
+    --dataset_name "nthakur/mirage-bench" \
+    --prediction_dataset "nthakur/mirage-bench-output" \
     --prediction_model "meta-llama/Meta-Llama-3-8B-Instruct" \
     --judge "BAAI/bge-reranker-v2-m3" \
-    --cache_dir "/mnt/users/n3thakur/cache"
+    --cache_dir "<your_cache_dir>"
 done
 """
 

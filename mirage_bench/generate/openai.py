@@ -18,7 +18,7 @@ class OpenAIClient(BaseClient):
         model_name_or_path: str,
         endpoint: str = None,
         api_key: str = None,
-        api_version: str = "2024-02-01",
+        api_version: str = None,
         wait: int = 10,
     ):
         self.deployment_name = model_name_or_path
@@ -27,7 +27,7 @@ class OpenAIClient(BaseClient):
         self.client = AzureOpenAI(
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT") if endpoint is None else endpoint,
             api_key=os.getenv("AZURE_OPENAI_API_KEY") if api_key is None else api_key,
-            api_version=api_version,
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION") if api_version is None else api_version,
         )
 
     def response(

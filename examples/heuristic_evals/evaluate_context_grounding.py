@@ -1,13 +1,13 @@
 """
-export CUDA_VISIBLE_DEVICES=5
-export HF_HOME=/mnt/users/n3thakur/cache
-export DATASETS_HF_HOME=/mnt/users/n3thakur/cache
+export CUDA_VISIBLE_DEVICES=0 (or any other GPU configuration)
+export HF_HOME=<your_cache_dir>
+export DATASETS_HF_HOME=<your_cache_dir>
 
 for lang in en; do
     python evaluate_context_grounding.py --language $lang --split dev \
     --judge "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7" \
-    --dataset_name "nthakur/mirage-eval" \
-    --prediction_dataset "nthakur/mirage-eval-rag-output" \
+    --dataset_name "nthakur/mirage-bench" \
+    --prediction_dataset "nthakur/mirage-bench-output" \
     --prediction_model "meta-llama/Meta-Llama-3.1-70B-Instruct"
 done
 """

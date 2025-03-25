@@ -31,9 +31,19 @@ ISO_TO_LANG = {
 
 
 ##### EASY UTIL FUNCTIONS #####
-def preprocessing_text(text: str) -> str:
+def preprocessing_text(text: str, remove_hashtags: bool = True) -> str:
     # Remove the citations from the text
-    return text.strip().split("\n\n")[0].strip().replace("##Reason:", "").replace("##Answer:", "").strip()
+    if remove_hashtags:
+        return text.strip().split("\n\n")[0].strip().replace("##Reason:", "").replace("##Answer:", "").strip()
+    else:
+        return (
+            text.strip()
+            .split("\n\n")[0]
+            .strip()
+            .replace("##Reason:", "Reason:")
+            .replace("##Answer:", "Answer:")
+            .strip()
+        )
 
 
 def parse(text: str, regex: str = None) -> str:
