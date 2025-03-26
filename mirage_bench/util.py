@@ -7,6 +7,15 @@ import datasets
 from tqdm.auto import tqdm
 
 
+def load_prompts(dataset_name: str, language_code: str, split: str = "dev") -> dict[str, str]:
+    prompts = {}
+    hf_dataset = datasets.load_dataset(dataset_name, language_code, split=split)
+
+    for row in tqdm(hf_dataset, total=len(hf_dataset), desc="Loading prompts"):
+        prompts[row["query_id"]] = row["prompt"]
+    return prompts
+
+
 def load_queries(dataset_name: str, language_code: str, split: str = "dev") -> dict[str, str]:
     queries = {}
     hf_dataset = datasets.load_dataset(dataset_name, language_code, split=split)
@@ -90,3 +99,14 @@ def save_results(
     with open(os.path.join(output_dir, filename), "w") as f:
         for idx in results:
             f.write(json.dumps(results[idx], ensure_ascii=False) + "\n")
+
+
+def load_results(input_filepath: str) -> list[dict[str, str | list[str]]]:
+    """
+    Load a JSONL file and return its contents as a list.
+    """
+    if not input_filepath.endswith(".jsonl"):
+        raise ValueError("The input file must be a valid JSONL file.")
+
+    with open(input_filepath, encoding="utf-8") as fin:
+        return [json.loads(row) for row in fin]

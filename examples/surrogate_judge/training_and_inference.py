@@ -103,7 +103,7 @@ if __name__ == "__main__":
     parser.add_argument("--cache_dir", type=str, default=None, required=False)
     parser.add_argument("--all_models", type=str, nargs="+", required=True)
     parser.add_argument("--features", type=str, nargs="+", required=True)
-    parser.add_argument("--holdout_models", type=str, nargs="+", default=[])
+    parser.add_argument("--holdout_models", type=str, nargs="+", default=None)
     parser.add_argument("--num_tournaments", type=int, default=200, required=False)
     parser.add_argument("--matches_per_tournament", type=int, default=50, required=False)
     parser.add_argument("--surrogate_judge", type=str, default=None, required=False)

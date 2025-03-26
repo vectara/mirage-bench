@@ -7,7 +7,15 @@ import random
 
 from tqdm import tqdm
 
-from mirage_bench.generate import AnyScaleAPIClient, ClaudeAPIClient, GeminiAPIClient, OpenAIClient, VLLMClient
+from mirage_bench.generate import (
+    AnyScaleAPIClient,
+    AzureOpenAIClient,
+    ClaudeAPIClient,
+    CohereAPIClient,
+    GeminiAPIClient,
+    OpenAIClient,
+    VLLMClient,
+)
 
 from .util import preprocessing_text
 
@@ -50,7 +58,9 @@ and "[[C]]" for a tie.
 
 CLIENT_MAP = {
     "anyscale": AnyScaleAPIClient,
+    "azure_openai": AzureOpenAIClient,
     "claude": ClaudeAPIClient,
+    "cohere": CohereAPIClient,
     "gemini": GeminiAPIClient,
     "openai": OpenAIClient,
     "vllm": VLLMClient,

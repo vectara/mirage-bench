@@ -108,7 +108,6 @@ class AutomaticAnswerOverlapEvaluator:
         queries: dict[str, str],
         prompt: str = DEFAULT_EVAL_PROMPT,
         batch_size: int = 128,
-        num_gpus: int = 1,
         num_instances: int = 1,
         shards: int = 12,
         postprocess_regex: str = r"Score:(.*?)$",  # regex to extract the rating from the raw prediction
@@ -143,7 +142,6 @@ class AutomaticAnswerOverlapEvaluator:
             prompts=prompts,
             query_ids=list(documents.keys()),
             batch_size=batch_size,
-            num_gpus=num_gpus,
             num_instances=num_instances,
             shards=shards,
         )

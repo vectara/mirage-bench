@@ -5,29 +5,29 @@ import os
 import time
 
 import openai
-from openai import OpenAI
+from openai import AzureOpenAI
 
 from .base import BaseClient
 
 logger = logging.getLogger(__name__)
 
 
-class OpenAIClient(BaseClient):
+class AzureOpenAIClient(BaseClient):
     def __init__(
         self,
         model_name_or_path: str,
-        organization: str = None,
-        project_id: str = None,
+        endpoint: str = None,
         api_key: str = None,
+        api_version: str = None,
         wait: int = 10,
     ):
         self.deployment_name = model_name_or_path
         self.wait = wait
         logger.info(f"Initializing OpenAI API Client: {model_name_or_path}")
-        self.client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY") if api_key is None else api_key,
-            organization=os.getenv("ORGANIZATION") if organization is None else organization,
-            project=os.getenv("PROJECT_ID") if project_id is None else project_id,
+        self.client = AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT") if endpoint is None else endpoint,
+            api_key=os.getenv("AZURE_OPENAI_API_KEY") if api_key is None else api_key,
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION") if api_version is None else api_version,
         )
 
     def response(

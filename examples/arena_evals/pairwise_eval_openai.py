@@ -12,7 +12,7 @@ PREDICTION_MODELS=(
 
 for lang in en; do
     python pairwise_eval_openai.py --language $lang --split dev \
-    --client "openai" \
+    --client "azure_openai" \
     --judge "gpt-4o-mini" \
     --dataset_name "nthakur/mirage-bench" \
     --prediction_dataset "nthakur/mirage-bench-output" \
