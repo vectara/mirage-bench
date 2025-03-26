@@ -114,7 +114,6 @@ if __name__ == "__main__":
                 split=args.split,
                 model_name=model_name,
             )
-        ### predic
 
     # Evaluate the predictions
     scores = evaluator.evaluate(

@@ -11,12 +11,10 @@ authors = [
 ]
 requires-python = ">=3.10"
 keywords = [
-    "Transformer Networks",
-    "BERT",
-    "XLNet",
-    "sentence embedding",
-    "PyTorch",
-    "NLP",
+    "RAG",
+    "multilingual",
+    "question answering",
+    "benchmark",
     "deep learning",
 ]
 classifiers = [
@@ -38,6 +36,9 @@ dependencies = [
     "FlagEmbedding",
     "anthropic",
     "google-generativeai",
+    "cohere",
+    "choix",
+    "sklearn",
 ]
 
 [build-system]

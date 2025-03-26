@@ -77,7 +77,6 @@ if __name__ == "__main__":
     # Generate the outputs for the prompts using the VLLM client
     outputs = azure_openai_client.batch_call(
         prompts=prompts,
-        query_ids=query_ids,
         batch_size=args.batch_size,
         temperature=args.temperature,
         max_new_tokens=args.max_new_tokens,
@@ -85,9 +84,7 @@ if __name__ == "__main__":
 
     # Save the output predictions}
     predictions = {}
-    for output in outputs:
-        query_id = output["query_id"]
-        prediction = output["output"]
+    for query_id, prediction in zip(query_ids, outputs):
         predictions[query_id] = prediction
 
     ### print the top 5 predictions
