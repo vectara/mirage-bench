@@ -18,7 +18,7 @@ This repository provides an easy way to perform the following four objectives:
 4. Train a surrogate judge (linear regression) to train and bootstrap the expensive LLM-as-a-judge design learnt using heuristic features.
 
 For more information, checkout out our publication:
-- [MIRAGE-Bench: Automatic Multilingual Benchmark Arena for Retrieval-Augmented Generation Systems](https://arxiv.org/abs/2410.13716) (Accepted at NAACL 2025 Main Conference)
+- [MIRAGE-Bench: Automatic Multilingual Benchmark Arena for Retrieval-Augmented Generation Systems](https://arxiv.org/abs/2410.13716) (Accepted at NAACL 2025 Main Conference :star:)
 
 ## Installation
 
@@ -134,8 +134,6 @@ documents = util.load_documents(
     language_code="en", 
     split="dev"
 )
-
-# Load the queries available in the split
 queries = util.load_queries(
     dataset_name="nthakur/mirage-bench", 
     language_code="en", 
@@ -143,8 +141,6 @@ queries = util.load_queries(
 )
 
 # In this example we will evaluate two models:
-# 1. meta-llama/Meta-Llama-3-8B-Instruct
-# 2. meta-llama/Meta-Llama-3-70B-Instruct
 models = [
     "meta-llama/Meta-Llama-3-8B-Instruct",
     "meta-llama/Meta-Llama-3-70B-Instruct"
