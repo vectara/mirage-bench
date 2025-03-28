@@ -10,23 +10,23 @@
 
 # MIRAGE-BENCH: Benchmarking LLM Generation Across Multiple Languages
 
-This repository provides an easy way to perform the following four objectives:
+This repository provides an easy way to achieve the following four objectives:
 
-1. Generate RAG-based answers to mulitilingual questions with support to many open-sourced LLMs tied with vLLM and closed-source LLMs via APIs such as Azure OpenAI, Cohere, Anthropic etc.
-2. Evaluate multilingual RAG answers based on multiple heuristic features, such as support, fluency, or even automatic ones using open-sourced LLMs supported in vLLM.
-3. LLM-as-a-Judge design to compare pairwise multilingual RAG answers, and train a bradley-terry model (with bootstrapping) to construct an offline multilingual RAG arena.
-4. Train a surrogate judge (linear regression) to train and bootstrap the expensive LLM-as-a-judge design learnt using heuristic features.
+1. Generate RAG-based answers to multilingual questions, with support for many open-source LLMs integrated via [vLLM](https://docs.vllm.ai/en/latest/getting_started/installation.html), as well as closed-source LLMs through APIs such as Azure OpenAI, Cohere, Anthropic, etc.
+2. Evaluate multilingual RAG answers based on a variety of heuristic features (e.g., support, fluency) or automatic evaluations using open-source LLMs supported in vLLM.
+3. Conduct an LLM-as-a-Judge design to compare pairwise multilingual RAG answers and train a Bradley-Terry model (with bootstrapping) to build an offline multilingual RAG arena.
+4. Train a surrogate judge (linear regression) to learn from and bootstrap the expensive LLM-as-a-Judge approach using heuristic features.
 
-For more information, checkout out our publication:
+For more information, check out our publication:
 - [MIRAGE-Bench: Automatic Multilingual Benchmark Arena for Retrieval-Augmented Generation Systems](https://arxiv.org/abs/2410.13716) (Accepted at NAACL 2025 Main Conference :star:)
 
 ## Installation
 
 We recommend **Python 3.9+** and installing the latest version of **[vLLM](https://docs.vllm.ai/en/latest/getting_started/installation.html)**.
 
-**Install with pip**
+**Install with pip:**
 
-```
+```bash
 pip install -U mirage-bench
 ```
 
@@ -34,25 +34,35 @@ pip install -U mirage-bench
 
 Alternatively, you can also clone the latest version from the [repository](https://github.com/vectara/mirage-bench) and install it directly from the source code:
 
-````
+```bash
 pip install -e .
-```` 
+```
+
+## Datasets
+
+| Resource | Description |
+|:---------|:------------|
+| :hugs: [mirage-bench](https://huggingface.co/datasets/nthakur/mirage-bench) | All queries & input prompts available in MIRAGE-Bench |
+| :hugs: [mirage-bench-output](https://huggingface.co/datasets/nthakur/mirage-bench-output) | Pre-computed RAG answers and all feature scores for 21 models |
+| :hugs: [mirage-bench-pairwise-judgments](https://huggingface.co/datasets/nthakur/mirage-bench-pairwise-judgments) | Pairwise judgments using GPT-4o LLM judge across all 19 models |
 
 ## Getting Started
 
-Make sure you have the latest **[vLLM](https://docs.vllm.ai/en/latest/getting_started/installation.html)** repository installed correctly.
+Make sure you have the latest **[vLLM](https://docs.vllm.ai/en/latest/getting_started/installation.html)** installed correctly.
 
 ### 1. Multilingual RAG Answer Generation
 
-First download a pretrained embedding a.k.a. Sentence Transformer model.
+Generate the RAG answer for given multilingual queries in mirage-bench using an LLM model.
+> Similarly, you can even generate answers with HF models on single/multiple GPU instances with [vLLM](https://github.com/vectara/mirage-bench/blob/main/examples/generation/vllm_generation.py).
 
-````python
+```python
 # export AZURE_OPENAI_ENDPOINT="xxxxx"
 # export AZURE_OPENAI_API_KEY="xxxx"
 
 from mirage_bench import util
 from mirage_bench.generate import AzureOpenAIClient
 
+# Many other clients also available, e.g., Cohere or Anthropic
 client = AzureOpenAIClient(model_name_or_path="gpt-4o-mini")
 
 ### Prompts_dict contains query_id as key and prompt as value
@@ -68,8 +78,7 @@ outputs = client.batch_call(
     max_new_tokens=2048,
 )
 #### output contains the List of RAG outputs
-````
-Similarly, you can even generate answers with a single/multiple GPU inference with [vLLM generation](https://github.com/vectara/mirage-bench/blob/main/examples/generation/vllm_generation.py).
+```
 
 ### 2. Heuristic \& Automatic RAG Evaluation
 
@@ -97,7 +106,7 @@ predictions = util.load_predictions(
     model_name="meta-llama/Meta-Llama-3-8B-Instruct",
 )
 
-# Need to load the reference model, i.e., gold predictions
+# Need to load the reference model, i.e., ground_truth predictions
 # This step is not necessary in all heuristic features
 reference_predictions = util.load_predictions(
     dataset_name="nthakur/mirage-bench-output",
