@@ -1,6 +1,6 @@
 [project]
 name = "mirage-bench"
-version = "0.0.2"
+version = "0.0.3"
 description = "A RAG-based benchmark for multilingual question answering."
 license = { file = "LICENSE" }
 readme = "README.md"
@@ -39,7 +39,9 @@ dependencies = [
     "cohere",
     "choix", # required for bradley-terry model
     "scikit-learn", # required for training surrogate models
-    "multilingual-rouge", # required for rouge evaluation
+    "multilingual-rouge", # required for rouge evaluation score
+    "evaluate", # required for blue evaluation score
+    "pytrec-eval-terrier", # required for support scores
 ]
 
 [build-system]
