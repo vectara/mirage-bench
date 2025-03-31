@@ -1,6 +1,6 @@
 [project]
 name = "mirage-bench"
-version = "0.0.1"
+version = "0.0.2"
 description = "A RAG-based benchmark for multilingual question answering."
 license = { file = "LICENSE" }
 readme = "README.md"
@@ -38,7 +38,7 @@ dependencies = [
     "google-generativeai",
     "cohere",
     "choix",
-    "sklearn",
+    "scikit-learn",
 ]
 
 [build-system]
