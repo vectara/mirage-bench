@@ -1,6 +1,6 @@
 [project]
 name = "mirage-bench"
-version = "0.0.3"
+version = "0.0.4"
 description = "A RAG-based benchmark for multilingual question answering."
 license = { file = "LICENSE" }
 readme = "README.md"
