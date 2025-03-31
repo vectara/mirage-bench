@@ -37,8 +37,9 @@ dependencies = [
     "anthropic",
     "google-generativeai",
     "cohere",
-    "choix",
-    "scikit-learn",
+    "choix", # required for bradley-terry model
+    "scikit-learn", # required for training surrogate models
+    "multilingual-rouge", # required for rouge evaluation
 ]
 
 [build-system]
