@@ -1,4 +1,5 @@
 <!--- BADGES: START --->
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fmirage-bench.github.io%2F)](#website)
 [![HF Datasets](https://img.shields.io/badge/%F0%9F%A4%97-datasets-yellow)](https://huggingface.co/collections/nthakur/mirage-bench-naacl25-67ddb6166a7938a37436a455)
 [![GitHub - License](https://img.shields.io/github/license/vectara/mirage-bench?logo=github&style=flat&color=green)][#github-license]
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mirage-bench?logo=pypi&style=flat&color=blue)][#pypi-package]
