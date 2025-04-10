@@ -9,7 +9,9 @@
 [#pypi-package]: https://pypi.org/project/mirage-bench/
 <!--- BADGES: END --->
 
-# MIRAGE-BENCH: Benchmarking LLM Generation Across Multiple Languages
+# Benchmarking LLM Generation Across Multiple Languages
+
+![Watch the video](./images/mirage-bench-teaser.png)(https://youtu.be/jV8Mkx5zjaM)
 
 This repository provides an easy way to achieve the following four objectives:
 
