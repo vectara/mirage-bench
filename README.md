@@ -1,17 +1,24 @@
 <!--- BADGES: START --->
-[![Website](https://img.shields.io/website?url=https%3A%2F%2Fmirage-bench.github.io%2F)](#website)
-[![HF Datasets](https://img.shields.io/badge/%F0%9F%A4%97-datasets-yellow)](https://huggingface.co/collections/nthakur/mirage-bench-naacl25-67ddb6166a7938a37436a455)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fmirage-bench.github.io%2F)][#website]
+[![HF Datasets](https://img.shields.io/badge/%F0%9F%A4%97-datasets-yellow)][#huggingface]
 [![GitHub - License](https://img.shields.io/github/license/vectara/mirage-bench?logo=github&style=flat&color=green)][#github-license]
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mirage-bench?logo=pypi&style=flat&color=blue)][#pypi-package]
 [![PyPI - Package Version](https://img.shields.io/pypi/v/mirage-bench?logo=pypi&style=flat&color=orange)][#pypi-package]
+[![YouTube Video](https://img.shields.io/youtube/views/usvu6Sk1ynk?logo=youtube&style=flat&color=red)][#youtube]
+
 
 [#github-license]: https://github.com/vectara/mirage-bench/blob/master/LICENSE
 [#pypi-package]: https://pypi.org/project/mirage-bench/
+[#youtube]: https://www.youtube.com/watch?v=usvu6Sk1ynk&t=2655s
+[#huggingface]: https://huggingface.co/collections/nthakur/mirage-bench-naacl25-67ddb6166a7938a37436a455
+[#website]: https://mirage-bench.github.io/
 <!--- BADGES: END --->
 
-# Benchmarking LLM Generation Across Multiple Languages
+# Benchmarking LLM Generation in Multilingual RAG 
 
-![Watch the video](./images/mirage-bench-teaser.png)(https://youtu.be/jV8Mkx5zjaM)
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=jV8Mkx5zjaM
+" target="_blank"><img src="./images/mirage-bench-teaser.png" 
+alt="IMAGE ALT TEXT HERE" width="600" height="270" border="5" /></a>
 
 This repository provides an easy way to achieve the following four objectives:
 
