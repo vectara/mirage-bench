@@ -81,6 +81,7 @@ outputs = client.batch_call(
     max_new_tokens=2048,
 )
 #### output contains the List of RAG outputs
+# ["##Reason: Passage [] provides reasoning ... ##Answer: Therefore answer is X"]
 ```
 
 ### 2. Heuristic \& Automatic RAG Evaluation
